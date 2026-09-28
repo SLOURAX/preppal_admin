@@ -74,7 +74,7 @@ body {
 @layer components {
   .surface-card {
     border: 1px solid var(--border);
-    border-radius: 1.25rem;
+    border-radius: 1rem;
     background: var(--surface);
     box-shadow: var(--shadow);
   }
