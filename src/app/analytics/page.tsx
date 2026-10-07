@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { AdminShell } from "@/components/layout";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -27,9 +27,15 @@ const PLATFORM_STATS = {
   rewardsRedeemed: 3810,
 };
 
-const DAU_SERIES = [980, 1020, 1100, 1280, 1350, 1190, 1050, 1310, 1420, 1380, 1290, 1450, 1390, 1342];
+const DAU_SERIES = [
+  980, 1020, 1100, 1280, 1350, 1190, 1050, 1310, 1420, 1380, 1290, 1450, 1390,
+  1342,
+];
 const REG_SERIES = [28, 34, 41, 55, 62, 47, 39, 58, 71, 66, 54, 80, 73, 61];
-const QUIZ_SERIES = [3100, 3400, 3800, 4200, 4600, 4000, 3600, 4400, 5000, 4800, 4500, 5200, 4900, 4812];
+const QUIZ_SERIES = [
+  3100, 3400, 3800, 4200, 4600, 4000, 3600, 4400, 5000, 4800, 4500, 5200, 4900,
+  4812,
+];
 
 const SUBJECT_ACCURACY = [
   { subject: "Mathematics", accuracy: 62, attempts: 48200 },
@@ -66,7 +72,10 @@ const TOP_USERS = [
   { name: "Grace Mensah", xp: 29750, quizzes: 198, plan: "Level 1" },
 ];
 
-const HOURLY_ACTIVITY = [12, 8, 4, 2, 1, 3, 18, 62, 148, 220, 310, 280, 240, 260, 290, 330, 380, 400, 380, 310, 240, 180, 110, 62];
+const HOURLY_ACTIVITY = [
+  12, 8, 4, 2, 1, 3, 18, 62, 148, 220, 310, 280, 240, 260, 290, 330, 380, 400,
+  380, 310, 240, 180, 110, 62,
+];
 
 const FINANCE_SERIES = [
   { month: "Apr", deposits: 820000, withdrawals: 610000 },
@@ -142,7 +151,9 @@ function KpiCard({
 }) {
   return (
     <article className="surface-card relative overflow-hidden rounded-2xl p-4">
-      <span className={`grid size-9 place-items-center rounded-xl text-base ${tone}`}>
+      <span
+        className={`grid size-9 place-items-center rounded-xl text-base ${tone}`}
+      >
         {icon}
       </span>
       <p className="text-foreground mt-3 text-xl font-bold">{value}</p>
@@ -226,8 +237,7 @@ export default function AnalyticsPage() {
   const maxHourly = Math.max(...HOURLY_ACTIVITY);
   const peakHour = HOURLY_ACTIVITY.indexOf(maxHourly);
 
-  const netFlow =
-    PLATFORM_STATS.totalDeposited - PLATFORM_STATS.totalWithdrawn;
+  const netFlow = PLATFORM_STATS.totalDeposited - PLATFORM_STATS.totalWithdrawn;
 
   const maxFinance = Math.max(...FINANCE_SERIES.map((f) => f.deposits));
 
@@ -247,7 +257,7 @@ export default function AnalyticsPage() {
           </p>
         </div>
         {/* Period filter */}
-        <div className="flex items-center gap-1 rounded-full bg-surface-subtle/80 p-1 w-fit">
+        <div className="bg-surface-subtle/80 flex w-fit items-center gap-1 rounded-full p-1">
           {PERIOD_OPTIONS.map((opt) => (
             <button
               key={opt.value}
@@ -272,18 +282,90 @@ export default function AnalyticsPage() {
           sub="Top-level health indicators across the entire platform"
         />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-          <KpiCard label="Total users" value={fmt(PLATFORM_STATS.totalUsers)} sub="All registered accounts" icon="♙" tone="bg-primary/10 text-primary" />
-          <KpiCard label="Active today" value={fmt(PLATFORM_STATS.activeToday)} sub="Unique sessions today" icon="⚡" tone="bg-emerald-500/10 text-emerald-600" />
-          <KpiCard label="New this month" value={fmt(PLATFORM_STATS.newThisMonth)} sub="Registrations in period" icon="✦" tone="bg-blue-500/10 text-blue-600" />
-          <KpiCard label="Churn rate" value={fmtPct(PLATFORM_STATS.churnRate)} sub="30-day inactivity rate" icon="↘" tone="bg-rose-500/10 text-rose-600" />
-          <KpiCard label="Quizzes today" value={fmt(PLATFORM_STATS.quizzesToday)} sub="Completed sessions" icon="▤" tone="bg-violet-500/10 text-violet-600" />
-          <KpiCard label="Total quizzes" value={fmt(PLATFORM_STATS.totalQuizzes)} sub="All time completions" icon="◈" tone="bg-primary/10 text-primary" />
-          <KpiCard label="Avg session" value={fmtDuration(PLATFORM_STATS.avgSessionDuration)} sub="Per quiz session" icon="⏱" tone="bg-amber-500/10 text-amber-600" />
-          <KpiCard label="AI hints served" value={fmt(PLATFORM_STATS.aiHintsUsed)} sub="Across all sessions" icon="✧" tone="bg-cyan-500/10 text-cyan-600" />
-          <KpiCard label="XP issued" value={fmt(PLATFORM_STATS.totalXpIssued)} sub="Total lifetime XP" icon="⬆" tone="bg-indigo-500/10 text-indigo-600" />
-          <KpiCard label="Coins in circulation" value={fmt(PLATFORM_STATS.coinsCirculating)} sub="Across all wallets" icon="ℙ" tone="bg-amber-500/10 text-amber-600" />
-          <KpiCard label="Pending withdrawals" value={fmt(PLATFORM_STATS.pendingWithdrawals)} sub="Awaiting approval" icon="↗" tone="bg-rose-500/10 text-rose-600" />
-          <KpiCard label="Referrals (month)" value={fmt(PLATFORM_STATS.referralsThisMonth)} sub="Successful this period" icon="⇒" tone="bg-emerald-500/10 text-emerald-600" />
+          <KpiCard
+            label="Total users"
+            value={fmt(PLATFORM_STATS.totalUsers)}
+            sub="All registered accounts"
+            icon="♙"
+            tone="bg-primary/10 text-primary"
+          />
+          <KpiCard
+            label="Active today"
+            value={fmt(PLATFORM_STATS.activeToday)}
+            sub="Unique sessions today"
+            icon="⚡"
+            tone="bg-emerald-500/10 text-emerald-600"
+          />
+          <KpiCard
+            label="New this month"
+            value={fmt(PLATFORM_STATS.newThisMonth)}
+            sub="Registrations in period"
+            icon="✦"
+            tone="bg-blue-500/10 text-blue-600"
+          />
+          <KpiCard
+            label="Churn rate"
+            value={fmtPct(PLATFORM_STATS.churnRate)}
+            sub="30-day inactivity rate"
+            icon="↘"
+            tone="bg-rose-500/10 text-rose-600"
+          />
+          <KpiCard
+            label="Quizzes today"
+            value={fmt(PLATFORM_STATS.quizzesToday)}
+            sub="Completed sessions"
+            icon="▤"
+            tone="bg-violet-500/10 text-violet-600"
+          />
+          <KpiCard
+            label="Total quizzes"
+            value={fmt(PLATFORM_STATS.totalQuizzes)}
+            sub="All time completions"
+            icon="◈"
+            tone="bg-primary/10 text-primary"
+          />
+          <KpiCard
+            label="Avg session"
+            value={fmtDuration(PLATFORM_STATS.avgSessionDuration)}
+            sub="Per quiz session"
+            icon="⏱"
+            tone="bg-amber-500/10 text-amber-600"
+          />
+          <KpiCard
+            label="AI hints served"
+            value={fmt(PLATFORM_STATS.aiHintsUsed)}
+            sub="Across all sessions"
+            icon="✧"
+            tone="bg-cyan-500/10 text-cyan-600"
+          />
+          <KpiCard
+            label="XP issued"
+            value={fmt(PLATFORM_STATS.totalXpIssued)}
+            sub="Total lifetime XP"
+            icon="⬆"
+            tone="bg-indigo-500/10 text-indigo-600"
+          />
+          <KpiCard
+            label="Coins in circulation"
+            value={fmt(PLATFORM_STATS.coinsCirculating)}
+            sub="Across all wallets"
+            icon="ℙ"
+            tone="bg-amber-500/10 text-amber-600"
+          />
+          <KpiCard
+            label="Pending withdrawals"
+            value={fmt(PLATFORM_STATS.pendingWithdrawals)}
+            sub="Awaiting approval"
+            icon="↗"
+            tone="bg-rose-500/10 text-rose-600"
+          />
+          <KpiCard
+            label="Referrals (month)"
+            value={fmt(PLATFORM_STATS.referralsThisMonth)}
+            sub="Successful this period"
+            icon="⇒"
+            tone="bg-emerald-500/10 text-emerald-600"
+          />
         </div>
       </section>
 
@@ -297,8 +379,12 @@ export default function AnalyticsPage() {
           <div className="surface-card rounded-2xl p-5">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <p className="text-foreground text-sm font-semibold">Daily active users</p>
-                <p className="text-muted-foreground text-xs">Unique logins per day</p>
+                <p className="text-foreground text-sm font-semibold">
+                  Daily active users
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  Unique logins per day
+                </p>
               </div>
               <span className="text-primary text-xl font-black">
                 {fmt(dauSlice[dauSlice.length - 1])}
@@ -309,10 +395,14 @@ export default function AnalyticsPage() {
           <div className="surface-card rounded-2xl p-5">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <p className="text-foreground text-sm font-semibold">New registrations</p>
-                <p className="text-muted-foreground text-xs">Sign-ups per day</p>
+                <p className="text-foreground text-sm font-semibold">
+                  New registrations
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  Sign-ups per day
+                </p>
               </div>
-              <span className="text-emerald-600 text-xl font-black">
+              <span className="text-xl font-black text-emerald-600">
                 {fmt(regSlice[regSlice.length - 1])}
               </span>
             </div>
@@ -321,10 +411,14 @@ export default function AnalyticsPage() {
           <div className="surface-card rounded-2xl p-5">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <p className="text-foreground text-sm font-semibold">Quiz completions</p>
-                <p className="text-muted-foreground text-xs">Sessions completed per day</p>
+                <p className="text-foreground text-sm font-semibold">
+                  Quiz completions
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  Sessions completed per day
+                </p>
               </div>
-              <span className="text-violet-600 text-xl font-black">
+              <span className="text-xl font-black text-violet-600">
                 {fmt(quizSlice[quizSlice.length - 1])}
               </span>
             </div>
@@ -342,7 +436,9 @@ export default function AnalyticsPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           {/* Plan distribution */}
           <div className="surface-card rounded-2xl p-5">
-            <p className="text-foreground mb-5 font-semibold">Plan distribution</p>
+            <p className="text-foreground mb-5 font-semibold">
+              Plan distribution
+            </p>
             <div className="space-y-4">
               {PLAN_DIST.map(({ plan, users, pct: p }) => (
                 <div key={plan}>
@@ -373,7 +469,9 @@ export default function AnalyticsPage() {
 
           {/* Top users */}
           <div className="surface-card rounded-2xl p-5">
-            <p className="text-foreground mb-4 font-semibold">Top users by XP</p>
+            <p className="text-foreground mb-4 font-semibold">
+              Top users by XP
+            </p>
             <div className="divide-border divide-y">
               {TOP_USERS.map((u, i) => (
                 <div key={u.name} className="flex items-center gap-3 py-2.5">
@@ -384,12 +482,18 @@ export default function AnalyticsPage() {
                     {u.name.slice(0, 1)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-foreground truncate text-xs font-semibold">{u.name}</p>
-                    <p className="text-muted-foreground text-[10px]">{fmt(u.quizzes)} quizzes</p>
+                    <p className="text-foreground truncate text-xs font-semibold">
+                      {u.name}
+                    </p>
+                    <p className="text-muted-foreground text-[10px]">
+                      {fmt(u.quizzes)} quizzes
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <PlanBadge plan={u.plan} />
-                    <span className="text-primary text-xs font-bold">{fmt(u.xp)} XP</span>
+                    <span className="text-primary text-xs font-bold">
+                      {fmt(u.xp)} XP
+                    </span>
                   </div>
                 </div>
               ))}
@@ -407,12 +511,16 @@ export default function AnalyticsPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           {/* Subject accuracy */}
           <div className="surface-card rounded-2xl p-5">
-            <p className="text-foreground mb-5 font-semibold">Subject accuracy (platform avg.)</p>
+            <p className="text-foreground mb-5 font-semibold">
+              Subject accuracy (platform avg.)
+            </p>
             <div className="space-y-4">
               {SUBJECT_ACCURACY.map(({ subject, accuracy, attempts }) => (
                 <div key={subject}>
                   <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-foreground text-xs font-medium">{subject}</span>
+                    <span className="text-foreground text-xs font-medium">
+                      {subject}
+                    </span>
                     <span className="text-muted-foreground text-xs">
                       {fmtPct(accuracy)} · {fmt(attempts)} attempts
                     </span>
@@ -434,14 +542,18 @@ export default function AnalyticsPage() {
 
           {/* Exam breakdown */}
           <div className="surface-card rounded-2xl p-5">
-            <p className="text-foreground mb-5 font-semibold">Exam track breakdown</p>
+            <p className="text-foreground mb-5 font-semibold">
+              Exam track breakdown
+            </p>
             <div className="space-y-4">
               {EXAM_POPULARITY.map(({ exam, quizzes, users, avgScore }) => {
                 const maxQ = Math.max(...EXAM_POPULARITY.map((e) => e.quizzes));
                 return (
                   <div key={exam} className="bg-surface-subtle rounded-2xl p-4">
                     <div className="mb-3 flex items-center justify-between">
-                      <span className="text-foreground font-semibold">{exam}</span>
+                      <span className="text-foreground font-semibold">
+                        {exam}
+                      </span>
                       <span
                         className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
                           avgScore >= 70
@@ -456,15 +568,27 @@ export default function AnalyticsPage() {
                     </div>
                     <div className="mb-3 grid grid-cols-2 gap-3 text-center">
                       <div>
-                        <p className="text-foreground text-base font-bold">{fmt(quizzes)}</p>
-                        <p className="text-muted-foreground text-[10px]">quiz sessions</p>
+                        <p className="text-foreground text-base font-bold">
+                          {fmt(quizzes)}
+                        </p>
+                        <p className="text-muted-foreground text-[10px]">
+                          quiz sessions
+                        </p>
                       </div>
                       <div>
-                        <p className="text-foreground text-base font-bold">{fmt(users)}</p>
-                        <p className="text-muted-foreground text-[10px]">active users</p>
+                        <p className="text-foreground text-base font-bold">
+                          {fmt(users)}
+                        </p>
+                        <p className="text-muted-foreground text-[10px]">
+                          active users
+                        </p>
                       </div>
                     </div>
-                    <ProgressBar value={quizzes} max={maxQ} color="bg-primary" />
+                    <ProgressBar
+                      value={quizzes}
+                      max={maxQ}
+                      color="bg-primary"
+                    />
                   </div>
                 );
               })}
@@ -497,7 +621,7 @@ export default function AnalyticsPage() {
               >
                 <div className="flex w-full flex-1 items-end">
                   <div
-                    className="w-full rounded-t-sm bg-primary/70 transition-all"
+                    className="bg-primary/70 w-full rounded-t-sm transition-all"
                     style={{ height: `${Math.max(3, (v / maxHourly) * 80)}px` }}
                   />
                 </div>
@@ -509,13 +633,13 @@ export default function AnalyticsPage() {
               </div>
             ))}
           </div>
-          <div className="mt-5 flex gap-3 text-[10px] text-muted-foreground">
+          <div className="text-muted-foreground mt-5 flex gap-3 text-[10px]">
             <span>Low ◀</span>
             <div className="flex flex-1 items-center gap-0.5">
               {[0.15, 0.3, 0.5, 0.7, 0.85, 1].map((v) => (
                 <div
                   key={v}
-                  className="h-2 flex-1 rounded-sm bg-primary"
+                  className="bg-primary h-2 flex-1 rounded-sm"
                   style={{ opacity: v }}
                 />
               ))}
@@ -533,15 +657,21 @@ export default function AnalyticsPage() {
         />
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="surface-card rounded-2xl p-5">
-            <p className="text-foreground mb-5 font-semibold">AI hints by subject</p>
+            <p className="text-foreground mb-5 font-semibold">
+              AI hints by subject
+            </p>
             <div className="space-y-4">
               {AI_USAGE.map(({ subject, hints }) => {
                 const maxH = Math.max(...AI_USAGE.map((a) => a.hints));
                 return (
                   <div key={subject}>
                     <div className="mb-1 flex items-center justify-between">
-                      <span className="text-foreground text-xs font-medium">{subject}</span>
-                      <span className="text-muted-foreground text-xs">{fmt(hints)} hints</span>
+                      <span className="text-foreground text-xs font-medium">
+                        {subject}
+                      </span>
+                      <span className="text-muted-foreground text-xs">
+                        {fmt(hints)} hints
+                      </span>
                     </div>
                     <ProgressBar value={hints} max={maxH} color="bg-cyan-500" />
                   </div>
@@ -552,7 +682,9 @@ export default function AnalyticsPage() {
 
           <div className="flex flex-col gap-4">
             <div className="surface-card rounded-2xl p-5">
-              <p className="text-foreground mb-1 font-semibold">Total AI hints served</p>
+              <p className="text-foreground mb-1 font-semibold">
+                Total AI hints served
+              </p>
               <p className="text-foreground mt-2 text-3xl font-black">
                 {fmt(PLATFORM_STATS.aiHintsUsed)}
               </p>
@@ -561,13 +693,31 @@ export default function AnalyticsPage() {
               </p>
             </div>
             <div className="surface-card rounded-2xl p-5">
-              <p className="text-foreground mb-3 font-semibold">AI hint rate by segment</p>
+              <p className="text-foreground mb-3 font-semibold">
+                AI hint rate by segment
+              </p>
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: "Timed sessions", rate: "4.2%", color: "text-amber-600" },
-                  { label: "Playground sessions", rate: "31.8%", color: "text-cyan-600" },
-                  { label: "JAMB users", rate: "18.6%", color: "text-blue-600" },
-                  { label: "WAEC users", rate: "14.2%", color: "text-violet-600" },
+                  {
+                    label: "Timed sessions",
+                    rate: "4.2%",
+                    color: "text-amber-600",
+                  },
+                  {
+                    label: "Playground sessions",
+                    rate: "31.8%",
+                    color: "text-cyan-600",
+                  },
+                  {
+                    label: "JAMB users",
+                    rate: "18.6%",
+                    color: "text-blue-600",
+                  },
+                  {
+                    label: "WAEC users",
+                    rate: "14.2%",
+                    color: "text-violet-600",
+                  },
                 ].map(({ label, rate, color }) => (
                   <div key={label} className="bg-surface-subtle rounded-xl p-3">
                     <p className={`text-base font-bold ${color}`}>{rate}</p>
@@ -587,10 +737,34 @@ export default function AnalyticsPage() {
           sub="Deposits, withdrawals, net coin flow, and 6-month revenue trend"
         />
         <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <KpiCard label="Total deposited" value={fmtNGN(PLATFORM_STATS.totalDeposited)} sub="All time" icon="↙" tone="bg-emerald-500/10 text-emerald-600" />
-          <KpiCard label="Total withdrawn" value={fmtNGN(PLATFORM_STATS.totalWithdrawn)} sub="All time" icon="↗" tone="bg-rose-500/10 text-rose-600" />
-          <KpiCard label="Net flow" value={fmtNGN(netFlow)} sub="Deposits minus withdrawals" icon="⇌" tone="bg-primary/10 text-primary" />
-          <KpiCard label="Coins circulating" value={fmt(PLATFORM_STATS.coinsCirculating)} sub="Across all wallets" icon="ℙ" tone="bg-amber-500/10 text-amber-600" />
+          <KpiCard
+            label="Total deposited"
+            value={fmtNGN(PLATFORM_STATS.totalDeposited)}
+            sub="All time"
+            icon="↙"
+            tone="bg-emerald-500/10 text-emerald-600"
+          />
+          <KpiCard
+            label="Total withdrawn"
+            value={fmtNGN(PLATFORM_STATS.totalWithdrawn)}
+            sub="All time"
+            icon="↗"
+            tone="bg-rose-500/10 text-rose-600"
+          />
+          <KpiCard
+            label="Net flow"
+            value={fmtNGN(netFlow)}
+            sub="Deposits minus withdrawals"
+            icon="⇌"
+            tone="bg-primary/10 text-primary"
+          />
+          <KpiCard
+            label="Coins circulating"
+            value={fmt(PLATFORM_STATS.coinsCirculating)}
+            sub="Across all wallets"
+            icon="ℙ"
+            tone="bg-amber-500/10 text-amber-600"
+          />
         </div>
         <div className="surface-card rounded-2xl p-5">
           <p className="text-foreground mb-4 font-semibold">
@@ -617,18 +791,24 @@ export default function AnalyticsPage() {
                     title={`Withdrawals: ${fmtNGN(withdrawals)}`}
                   />
                 </div>
-                <span className="text-muted-foreground text-[9px]">{month}</span>
+                <span className="text-muted-foreground text-[9px]">
+                  {month}
+                </span>
               </div>
             ))}
           </div>
           <div className="mt-4 flex items-center gap-5">
             <div className="flex items-center gap-1.5">
               <span className="inline-block size-2.5 rounded-sm bg-emerald-500/80" />
-              <span className="text-muted-foreground text-[10px]">Deposits</span>
+              <span className="text-muted-foreground text-[10px]">
+                Deposits
+              </span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="inline-block size-2.5 rounded-sm bg-rose-500/70" />
-              <span className="text-muted-foreground text-[10px]">Withdrawals</span>
+              <span className="text-muted-foreground text-[10px]">
+                Withdrawals
+              </span>
             </div>
           </div>
         </div>
@@ -642,14 +822,18 @@ export default function AnalyticsPage() {
         />
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="surface-card rounded-2xl p-5">
-            <p className="text-foreground mb-5 font-semibold">Referral funnel (this month)</p>
+            <p className="text-foreground mb-5 font-semibold">
+              Referral funnel (this month)
+            </p>
             <div className="space-y-4">
               {REFERRAL_FUNNEL.map(({ label, value }, i) => {
                 const top = REFERRAL_FUNNEL[0].value;
                 return (
                   <div key={label}>
                     <div className="mb-1 flex items-center justify-between">
-                      <span className="text-foreground text-xs font-medium">{label}</span>
+                      <span className="text-foreground text-xs font-medium">
+                        {label}
+                      </span>
                       <span className="text-muted-foreground text-xs font-semibold">
                         {fmt(value)}
                         {i > 0 && (
@@ -680,7 +864,9 @@ export default function AnalyticsPage() {
 
           <div className="flex flex-col gap-4">
             <div className="surface-card rounded-2xl p-5">
-              <p className="text-foreground mb-1 font-semibold">Rewards redeemed</p>
+              <p className="text-foreground mb-1 font-semibold">
+                Rewards redeemed
+              </p>
               <p className="text-foreground mt-2 text-3xl font-black">
                 {fmt(PLATFORM_STATS.rewardsRedeemed)}
               </p>
@@ -689,13 +875,31 @@ export default function AnalyticsPage() {
               </p>
             </div>
             <div className="surface-card rounded-2xl p-5">
-              <p className="text-foreground mb-3 font-semibold">Referral efficiency</p>
+              <p className="text-foreground mb-3 font-semibold">
+                Referral efficiency
+              </p>
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: "Click-through rate", value: "67.6%", color: "text-blue-600" },
-                  { label: "Signup rate", value: "21.5%", color: "text-emerald-600" },
-                  { label: "Activation rate", value: "72.3%", color: "text-violet-600" },
-                  { label: "Avg reward / ref.", value: "420 coins", color: "text-amber-600" },
+                  {
+                    label: "Click-through rate",
+                    value: "67.6%",
+                    color: "text-blue-600",
+                  },
+                  {
+                    label: "Signup rate",
+                    value: "21.5%",
+                    color: "text-emerald-600",
+                  },
+                  {
+                    label: "Activation rate",
+                    value: "72.3%",
+                    color: "text-violet-600",
+                  },
+                  {
+                    label: "Avg reward / ref.",
+                    value: "420 coins",
+                    color: "text-amber-600",
+                  },
                 ].map(({ label, value, color }) => (
                   <div key={label} className="bg-surface-subtle rounded-xl p-3">
                     <p className={`text-base font-bold ${color}`}>{value}</p>
@@ -716,12 +920,48 @@ export default function AnalyticsPage() {
         />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {[
-            { label: "Questions flagged", value: "14", sub: "Awaiting review", tone: "bg-amber-500/10 text-amber-600", icon: "⚑" },
-            { label: "Suspicious accounts", value: "3", sub: "Flagged for review", tone: "bg-rose-500/10 text-rose-600", icon: "⚠" },
-            { label: "Avg. question accuracy", value: "63%", sub: "Across all questions", tone: "bg-primary/10 text-primary", icon: "✓" },
-            { label: "Content approved", value: "218", sub: "This week (auto)", tone: "bg-emerald-500/10 text-emerald-600", icon: "✔" },
-            { label: "Duplicate reports", value: "7", sub: "User-flagged duplicates", tone: "bg-amber-500/10 text-amber-600", icon: "⊞" },
-            { label: "System uptime", value: "99.8%", sub: "Last 30 days", tone: "bg-emerald-500/10 text-emerald-600", icon: "●" },
+            {
+              label: "Questions flagged",
+              value: "14",
+              sub: "Awaiting review",
+              tone: "bg-amber-500/10 text-amber-600",
+              icon: "⚑",
+            },
+            {
+              label: "Suspicious accounts",
+              value: "3",
+              sub: "Flagged for review",
+              tone: "bg-rose-500/10 text-rose-600",
+              icon: "⚠",
+            },
+            {
+              label: "Avg. question accuracy",
+              value: "63%",
+              sub: "Across all questions",
+              tone: "bg-primary/10 text-primary",
+              icon: "✓",
+            },
+            {
+              label: "Content approved",
+              value: "218",
+              sub: "This week (auto)",
+              tone: "bg-emerald-500/10 text-emerald-600",
+              icon: "✔",
+            },
+            {
+              label: "Duplicate reports",
+              value: "7",
+              sub: "User-flagged duplicates",
+              tone: "bg-amber-500/10 text-amber-600",
+              icon: "⊞",
+            },
+            {
+              label: "System uptime",
+              value: "99.8%",
+              sub: "Last 30 days",
+              tone: "bg-emerald-500/10 text-emerald-600",
+              icon: "●",
+            },
           ].map(({ label, value, sub, tone, icon }) => (
             <KpiCard
               key={label}
@@ -745,7 +985,7 @@ export default function AnalyticsPage() {
             <div>
               <p className="text-foreground font-bold">Platform insights</p>
               <p className="text-muted-foreground text-xs">
-                Automated signals from this period's data
+                Automated signals from this period&apos;s data
               </p>
             </div>
           </div>

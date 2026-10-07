@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { AdminShell } from "@/components/layout";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -39,13 +39,62 @@ const FLOW_SERIES = [
 ];
 
 const RECENT_TRANSACTIONS = [
-  { id: "TX-9021", user: "Amara Okafor", type: "Deposit", amount: 25000, date: "2 mins ago", status: "Completed" },
-  { id: "TX-9020", user: "David Adebayo", type: "Withdrawal", amount: -14000, date: "15 mins ago", status: "Pending" },
-  { id: "TX-9019", user: "Zainab Bello", type: "Deposit", amount: 10000, date: "1 hour ago", status: "Completed" },
-  { id: "TX-9018", user: "Chinedu Okoro", type: "Withdrawal", amount: -28000, date: "2 hours ago", status: "Completed" },
-  { id: "TX-9017", user: "Grace Mensah", type: "Deposit", amount: 5000, date: "3 hours ago", status: "Completed" },
-  { id: "TX-9016", user: "Tunde Bakare", type: "Deposit", amount: 15000, date: "3 hours ago", status: "Failed" },
-  { id: "TX-9015", user: "Maya Johnson", type: "Withdrawal", amount: -42000, date: "5 hours ago", status: "Completed" },
+  {
+    id: "TX-9021",
+    user: "Amara Okafor",
+    type: "Deposit",
+    amount: 25000,
+    date: "2 mins ago",
+    status: "Completed",
+  },
+  {
+    id: "TX-9020",
+    user: "David Adebayo",
+    type: "Withdrawal",
+    amount: -14000,
+    date: "15 mins ago",
+    status: "Pending",
+  },
+  {
+    id: "TX-9019",
+    user: "Zainab Bello",
+    type: "Deposit",
+    amount: 10000,
+    date: "1 hour ago",
+    status: "Completed",
+  },
+  {
+    id: "TX-9018",
+    user: "Chinedu Okoro",
+    type: "Withdrawal",
+    amount: -28000,
+    date: "2 hours ago",
+    status: "Completed",
+  },
+  {
+    id: "TX-9017",
+    user: "Grace Mensah",
+    type: "Deposit",
+    amount: 5000,
+    date: "3 hours ago",
+    status: "Completed",
+  },
+  {
+    id: "TX-9016",
+    user: "Tunde Bakare",
+    type: "Deposit",
+    amount: 15000,
+    date: "3 hours ago",
+    status: "Failed",
+  },
+  {
+    id: "TX-9015",
+    user: "Maya Johnson",
+    type: "Withdrawal",
+    amount: -42000,
+    date: "5 hours ago",
+    status: "Completed",
+  },
 ];
 
 const TOP_HOLDERS = [
@@ -101,7 +150,9 @@ function KpiCard({
 }) {
   return (
     <article className="surface-card relative overflow-hidden rounded-2xl p-4">
-      <span className={`grid size-9 place-items-center rounded-xl text-base ${tone}`}>
+      <span
+        className={`grid size-9 place-items-center rounded-xl text-base ${tone}`}
+      >
         {icon}
       </span>
       <p className="text-foreground mt-3 text-xl font-bold">{value}</p>
@@ -175,7 +226,7 @@ export default function WalletOverviewPage() {
             Monitor platform liquidity, coin circulation, and transaction flows.
           </p>
         </div>
-        <div className="flex items-center gap-1 rounded-full bg-surface-subtle/80 p-1 w-fit">
+        <div className="bg-surface-subtle/80 flex w-fit items-center gap-1 rounded-full p-1">
           {PERIOD_OPTIONS.map((opt) => (
             <button
               key={opt.value}
@@ -200,14 +251,62 @@ export default function WalletOverviewPage() {
           sub="Top-level financial indicators across the entire platform"
         />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-          <KpiCard label="Coins in circulation" value={fmt(FINANCE_STATS.coinsCirculating)} sub="Total unspent balances" icon="ℙ" tone="bg-amber-500/10 text-amber-600" />
-          <KpiCard label="Active wallets" value={fmt(FINANCE_STATS.activeWallets)} sub="Wallets with balance > 0" icon="◈" tone="bg-primary/10 text-primary" />
-          <KpiCard label="Net liquidity" value={fmtNGN(netFlow)} sub="Deposits minus withdrawals" icon="⇌" tone="bg-emerald-500/10 text-emerald-600" />
-          <KpiCard label="Pending withdrawals" value={fmt(FINANCE_STATS.pendingWithdrawalsCount)} sub={`${fmt(FINANCE_STATS.pendingWithdrawalsCoins)} coins total`} icon="↗" tone="bg-amber-500/10 text-amber-600" />
-          <KpiCard label="Total deposited" value={fmtNGN(FINANCE_STATS.totalDeposited)} sub="All-time fiat deposits" icon="↙" tone="bg-emerald-500/10 text-emerald-600" />
-          <KpiCard label="Total withdrawn" value={fmtNGN(FINANCE_STATS.totalWithdrawn)} sub="All-time fiat withdrawals" icon="↗" tone="bg-rose-500/10 text-rose-600" />
-          <KpiCard label="Avg deposit size" value={fmtNGN(FINANCE_STATS.avgDepositSize)} sub="Per transaction" icon="↘" tone="bg-emerald-500/10 text-emerald-600" />
-          <KpiCard label="Avg withdrawal size" value={fmtNGN(FINANCE_STATS.avgWithdrawalSize)} sub="Per transaction" icon="↖" tone="bg-rose-500/10 text-rose-600" />
+          <KpiCard
+            label="Coins in circulation"
+            value={fmt(FINANCE_STATS.coinsCirculating)}
+            sub="Total unspent balances"
+            icon="ℙ"
+            tone="bg-amber-500/10 text-amber-600"
+          />
+          <KpiCard
+            label="Active wallets"
+            value={fmt(FINANCE_STATS.activeWallets)}
+            sub="Wallets with balance > 0"
+            icon="◈"
+            tone="bg-primary/10 text-primary"
+          />
+          <KpiCard
+            label="Net liquidity"
+            value={fmtNGN(netFlow)}
+            sub="Deposits minus withdrawals"
+            icon="⇌"
+            tone="bg-emerald-500/10 text-emerald-600"
+          />
+          <KpiCard
+            label="Pending withdrawals"
+            value={fmt(FINANCE_STATS.pendingWithdrawalsCount)}
+            sub={`${fmt(FINANCE_STATS.pendingWithdrawalsCoins)} coins total`}
+            icon="↗"
+            tone="bg-amber-500/10 text-amber-600"
+          />
+          <KpiCard
+            label="Total deposited"
+            value={fmtNGN(FINANCE_STATS.totalDeposited)}
+            sub="All-time fiat deposits"
+            icon="↙"
+            tone="bg-emerald-500/10 text-emerald-600"
+          />
+          <KpiCard
+            label="Total withdrawn"
+            value={fmtNGN(FINANCE_STATS.totalWithdrawn)}
+            sub="All-time fiat withdrawals"
+            icon="↗"
+            tone="bg-rose-500/10 text-rose-600"
+          />
+          <KpiCard
+            label="Avg deposit size"
+            value={fmtNGN(FINANCE_STATS.avgDepositSize)}
+            sub="Per transaction"
+            icon="↘"
+            tone="bg-emerald-500/10 text-emerald-600"
+          />
+          <KpiCard
+            label="Avg withdrawal size"
+            value={fmtNGN(FINANCE_STATS.avgWithdrawalSize)}
+            sub="Per transaction"
+            icon="↖"
+            tone="bg-rose-500/10 text-rose-600"
+          />
         </div>
       </section>
 
@@ -246,11 +345,15 @@ export default function WalletOverviewPage() {
           <div className="mt-5 flex items-center justify-center gap-6">
             <div className="flex items-center gap-1.5">
               <span className="inline-block size-3 rounded-sm bg-emerald-500/80" />
-              <span className="text-muted-foreground text-[11px] font-semibold">Deposits</span>
+              <span className="text-muted-foreground text-[11px] font-semibold">
+                Deposits
+              </span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="inline-block size-3 rounded-sm bg-rose-500/70" />
-              <span className="text-muted-foreground text-[11px] font-semibold">Withdrawals</span>
+              <span className="text-muted-foreground text-[11px] font-semibold">
+                Withdrawals
+              </span>
             </div>
           </div>
         </div>
@@ -272,25 +375,36 @@ export default function WalletOverviewPage() {
                     <tr className="border-border text-muted-foreground border-b text-xs">
                       <th className="pb-3 font-medium">Transaction</th>
                       <th className="pb-3 font-medium">User</th>
-                      <th className="pb-3 font-medium text-right">Amount</th>
-                      <th className="pb-3 font-medium text-center">Status</th>
-                      <th className="pb-3 font-medium text-right">Time</th>
+                      <th className="pb-3 text-right font-medium">Amount</th>
+                      <th className="pb-3 text-center font-medium">Status</th>
+                      <th className="pb-3 text-right font-medium">Time</th>
                     </tr>
                   </thead>
                   <tbody className="divide-border divide-y">
                     {RECENT_TRANSACTIONS.map((tx) => (
-                      <tr key={tx.id} className="group transition-colors hover:bg-surface-subtle">
+                      <tr
+                        key={tx.id}
+                        className="group hover:bg-surface-subtle transition-colors"
+                      >
                         <td className="py-3 pr-4">
-                          <p className="text-foreground font-semibold">{tx.id}</p>
-                          <p className="text-muted-foreground text-[10px]">{tx.type}</p>
+                          <p className="text-foreground font-semibold">
+                            {tx.id}
+                          </p>
+                          <p className="text-muted-foreground text-[10px]">
+                            {tx.type}
+                          </p>
                         </td>
                         <td className="py-3 pr-4">
-                          <p className="text-foreground text-xs font-semibold">{tx.user}</p>
+                          <p className="text-foreground text-xs font-semibold">
+                            {tx.user}
+                          </p>
                         </td>
                         <td className="py-3 pr-4 text-right">
                           <span
                             className={`font-bold ${
-                              tx.amount > 0 ? "text-emerald-600" : "text-rose-600"
+                              tx.amount > 0
+                                ? "text-emerald-600"
+                                : "text-rose-600"
                             }`}
                           >
                             {tx.amount > 0 ? "+" : ""}
@@ -328,11 +442,15 @@ export default function WalletOverviewPage() {
                       {h.name.slice(0, 1)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-foreground truncate text-xs font-semibold">{h.name}</p>
+                      <p className="text-foreground truncate text-xs font-semibold">
+                        {h.name}
+                      </p>
                       <PlanBadge plan={h.plan} />
                     </div>
                     <div className="text-right">
-                      <span className="text-amber-600 text-xs font-bold">{fmt(h.balance)} ℙ</span>
+                      <span className="text-xs font-bold text-amber-600">
+                        {fmt(h.balance)} ℙ
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -344,13 +462,15 @@ export default function WalletOverviewPage() {
 
       {/* ── 4. Automated insights panel ─────────────────────────────────── */}
       <section className="mb-2">
-        <div className="surface-card from-emerald-500/10 via-surface to-surface border-emerald-500/20 rounded-2xl bg-gradient-to-br p-5 sm:p-6">
+        <div className="surface-card via-surface to-surface rounded-2xl border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 p-5 sm:p-6">
           <div className="mb-4 flex items-center gap-3">
-            <span className="bg-emerald-500 text-white grid size-10 place-items-center rounded-xl text-lg">
+            <span className="grid size-10 place-items-center rounded-xl bg-emerald-500 text-lg text-white">
               ✧
             </span>
             <div>
-              <p className="text-foreground font-bold">Wallet Risk & Insights</p>
+              <p className="text-foreground font-bold">
+                Wallet Risk & Insights
+              </p>
               <p className="text-muted-foreground text-xs">
                 Automated liquidity and compliance signals
               </p>
@@ -367,7 +487,7 @@ export default function WalletOverviewPage() {
                 key={insight}
                 className="bg-surface/60 flex items-start gap-3 rounded-xl p-3"
               >
-                <span className="bg-emerald-500/20 text-emerald-600 mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-[10px]">
+                <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-emerald-500/20 text-[10px] text-emerald-600">
                   •
                 </span>
                 <p className="text-foreground text-xs leading-5">{insight}</p>
