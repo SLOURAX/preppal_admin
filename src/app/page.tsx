@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
@@ -63,7 +64,7 @@ export default function AdminLoginPage() {
               alt="Preppal"
               className="size-12 object-contain"
               height={48}
-              priority
+              loading="lazy"
               src="/assets/brand/preppal-mark.svg"
               width={48}
             />
@@ -77,27 +78,11 @@ export default function AdminLoginPage() {
             </div>
           </div>
           <span className="border-success/20 bg-success/10 text-success inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-wide uppercase">
-            <svg
+            <ShieldCheck
               aria-hidden="true"
               className="size-3.5"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <path
-                d="M12 3 5 6v5c0 4.4 2.9 8.5 7 10 4.1-1.5 7-5.6 7-10V6l-7-3Z"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-              />
-              <path
-                d="m9 12 2 2 4-4"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-              />
-            </svg>
+              strokeWidth={2}
+            />
             Secure
           </span>
         </div>

@@ -1,289 +1,414 @@
 "use client";
 
-import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+
+import {
+  AdminPageHeader,
+  MetricCard,
+  Pagination,
+  SectionCard,
+  StatusBadge,
+} from "@/components/admin-ui";
 import { AdminShell } from "@/components/layout";
+import { AdminIcon, Select, type AdminIconName } from "@/components/ui";
+import { apiClient } from "@/lib/api/client";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+type Period = "1" | "7" | "30" | "0";
+type LedgerKind = "Check-in" | "Quiz" | "Referral" | "Weekly goal" | "Other";
 
-type Period = "7" | "30" | "90" | "180" | "0";
-
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const REWARD_STATS = {
-  totalRewardsIssued: 48210,
-  coinsDistributed: 840200,
-  activeCampaigns: 4,
-  usersRewardedThisMonth: 3420,
-  marketplaceRedemptions: 1140,
-  referralSignups: 890,
-  streakBonuses: 14200,
-  avgRewardValue: 17.4,
-};
-
-const ACTIVE_CAMPAIGNS = [
-  { id: "RC-01", name: "Weekly Top 10 Leaderboard", type: "Recurring", coinsPool: 10000, participants: 8400, status: "Active" },
-  { id: "RC-02", name: "7-Day Study Streak", type: "Automated", coinsPool: "Unlimited", participants: 12400, status: "Active" },
-  { id: "RC-03", name: "Back to School Referral Promo", type: "Time-bound", coinsPool: 50000, participants: 2100, status: "Ending soon" },
-  { id: "RC-04", name: "First Perfect Score", type: "Achievement", coinsPool: "Unlimited", participants: 4500, status: "Active" },
-];
-
-const RECENT_REWARDS = [
-  { id: "RW-4821", user: "Amara Okafor", reason: "Weekly Leaderboard - 1st", amount: 1000, date: "10 mins ago" },
-  { id: "RW-4820", user: "David Adebayo", reason: "Referral Bonus", amount: 250, date: "45 mins ago" },
-  { id: "RW-4819", user: "Zainab Bello", reason: "7-Day Streak", amount: 50, date: "2 hours ago" },
-  { id: "RW-4818", user: "Chinedu Okoro", reason: "Marketplace: Exam Past Questions", amount: -500, date: "3 hours ago" }, // Negative means redemption
-  { id: "RW-4817", user: "Grace Mensah", reason: "First Perfect Score", amount: 500, date: "4 hours ago" },
-  { id: "RW-4816", user: "Tunde Bakare", reason: "Referral Bonus", amount: 250, date: "5 hours ago" },
-  { id: "RW-4815", user: "Maya Johnson", reason: "Weekly Leaderboard - 2nd", amount: 500, date: "5 hours ago" },
-];
-
-const MARKETPLACE_ITEMS = [
-  { name: "JAMB Past Questions Bundle", cost: 500, redemptions: 480, status: "Available" },
-  { name: "WAEC Science Prep Kit", cost: 800, redemptions: 310, status: "Available" },
-  { name: "1-on-1 Tutor Session (30m)", cost: 5000, redemptions: 45, status: "Limited" },
-  { name: "Preppal Pro (1 Month)", cost: 2000, redemptions: 210, status: "Available" },
-  { name: "Preppal T-Shirt Merch", cost: 10000, redemptions: 12, status: "Out of stock" },
-];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const fmt = (n: number | string) => (typeof n === "number" ? n.toLocaleString("en-NG") : n);
-
-const PERIOD_OPTIONS: { value: Period; label: string }[] = [
-  { value: "7", label: "Last 7 days" },
-  { value: "30", label: "Last 30 days" },
-  { value: "90", label: "Last 3 months" },
-  { value: "0", label: "All time" },
-];
-
-// ─── Reusable UI primitives ───────────────────────────────────────────────────
-
-function SectionTitle({ title, sub }: { title: string; sub: string }) {
-  return (
-    <div className="mb-5">
-      <h2 className="text-foreground text-lg font-bold">{title}</h2>
-      <p className="text-muted-foreground mt-0.5 text-xs">{sub}</p>
-    </div>
-  );
-}
-
-function KpiCard({
-  label,
-  value,
-  sub,
-  tone = "bg-primary/10 text-primary",
-  icon,
-}: {
-  readonly label: string;
-  readonly value: string;
-  readonly sub: string;
-  readonly tone?: string;
-  readonly icon: string;
-}) {
-  return (
-    <article className="surface-card relative overflow-hidden rounded-2xl p-4">
-      <span className={`grid size-9 place-items-center rounded-xl text-base ${tone}`}>
-        {icon}
-      </span>
-      <p className="text-foreground mt-3 text-xl font-bold">{value}</p>
-      <p className="text-foreground text-[.75rem] font-medium">{label}</p>
-      <p className="text-muted-foreground mt-0.5 text-[11px]">{sub}</p>
-    </article>
-  );
-}
-
-function StatusBadge({ status }: { readonly status: string }) {
-  const styles: Record<string, string> = {
-    Active: "bg-emerald-500/10 text-emerald-600",
-    Available: "bg-emerald-500/10 text-emerald-600",
-    "Ending soon": "bg-amber-500/10 text-amber-600",
-    Limited: "bg-amber-500/10 text-amber-600",
-    "Out of stock": "bg-rose-500/10 text-rose-600",
+interface RewardsResponse {
+  generatedAt: string;
+  period: Period;
+  rules: {
+    dailyCheckInXp: number;
+    referralXp: number;
+    xpPerCoin: number;
+    coinValueNgn: number;
+    premiumQuizMultiplier: number;
   };
-  return (
-    <span
-      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-        styles[status] ?? "bg-surface-subtle text-muted-foreground"
-      }`}
-    >
-      {status}
-    </span>
-  );
+  checkIns: {
+    checkedInToday: number;
+    xpIssuedToday: number;
+    participationRate: number;
+    longestActiveStreak: number;
+    longestStreakHolders: number;
+    daily: Array<{ date: string; label: string; count: number }>;
+  };
+  goals: {
+    distribution: Array<{
+      days: number | null;
+      label: string;
+      count: number;
+      percentage: number;
+    }>;
+    configuredLearners: number;
+    completedThisWeek: number;
+    completionRate: number;
+  };
+  ledger: Array<{
+    id: string;
+    userId: string;
+    learner: string;
+    email: string;
+    amount: number;
+    source: string;
+    createdAt: string;
+    kind: LedgerKind;
+    reason: string;
+  }>;
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+const PAGE_SIZE = 6;
+const number = (value: number) => value.toLocaleString("en-NG");
+const timestamp = (value: string) =>
+  new Intl.DateTimeFormat("en-NG", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    hour12: true,
+  }).format(new Date(value));
+const sourceLabel = (value: string) =>
+  value
+    .toLowerCase()
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 
 export default function RewardsPage() {
-  const [period, setPeriod] = useState<Period>("30");
+  const [queryText, setQueryText] = useState("");
+  const [kind, setKind] = useState("All sources");
+  const [period, setPeriod] = useState<Period>("1");
+  const [page, setPage] = useState(1);
+  const query = useQuery({
+    queryKey: ["admin", "rewards", period],
+    queryFn: () =>
+      apiClient<RewardsResponse>(`/api/v1/admin/rewards?period=${period}`),
+  });
+  const data = query.data;
+  const ledger = useMemo(() => data?.ledger ?? [], [data?.ledger]);
+  const filteredLedger = useMemo(() => {
+    const normalized = queryText.trim().toLowerCase();
+    return ledger.filter((item) => {
+      const matchesQuery =
+        !normalized ||
+        `${item.learner} ${item.email} ${item.reason} ${item.source} ${item.id}`
+          .toLowerCase()
+          .includes(normalized);
+      return matchesQuery && (kind === "All sources" || item.kind === kind);
+    });
+  }, [kind, ledger, queryText]);
+  const totalPages = Math.max(1, Math.ceil(filteredLedger.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const visibleLedger = filteredLedger.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
+  const maxCheckIns = Math.max(
+    1,
+    ...(data?.checkIns.daily.map((item) => item.count) ?? [1]),
+  );
+  const rules: ReadonlyArray<{
+    label: string;
+    value: string;
+    detail: string;
+    icon: AdminIconName;
+    tone: string;
+  }> = [
+    {
+      label: "Daily check-in",
+      value: `+${data?.rules.dailyCheckInXp ?? 2} XP`,
+      detail: "Awarded once per eligible day",
+      icon: "rewards",
+      tone: "bg-violet-500/10 text-violet-600",
+    },
+    {
+      label: "Verified referral",
+      value: `+${data?.rules.referralXp ?? 50} XP`,
+      detail: "Awarded after email verification",
+      icon: "users",
+      tone: "bg-blue-500/10 text-blue-600",
+    },
+    {
+      label: "XP conversion",
+      value: `${data?.rules.xpPerCoin ?? 50} XP = 1 coin`,
+      detail: `One coin is worth ₦${number(data?.rules.coinValueNgn ?? 1000)}`,
+      icon: "finance",
+      tone: "bg-amber-500/10 text-amber-600",
+    },
+    {
+      label: "Premium learning",
+      value: `${data?.rules.premiumQuizMultiplier ?? 2}× quiz XP`,
+      detail: "Applied to eligible quiz activity",
+      icon: "analytics",
+      tone: "bg-emerald-500/10 text-emerald-600",
+    },
+  ];
 
   return (
     <AdminShell>
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <span className="text-primary text-[10px] font-bold tracking-widest uppercase">
-            Gamification & Incentives
-          </span>
-          <h1 className="text-foreground mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
-            Rewards & Campaigns
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Manage coin distributions, leaderboards, achievements, and the marketplace.
-          </p>
-        </div>
-        <div className="flex items-center gap-1 rounded-full bg-surface-subtle/80 p-1 w-fit">
-          {PERIOD_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setPeriod(opt.value)}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
-                period === opt.value
-                  ? "bg-surface text-primary shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+      <div className="mx-auto w-full max-w-[1420px] space-y-5">
+        <AdminPageHeader
+          actions={
+            <Select
+              className="border-border bg-surface text-foreground h-9 rounded-xl border px-3 text-[.65rem] font-semibold outline-none"
+              onChange={(event) => {
+                setPeriod(event.target.value as Period);
+                setPage(1);
+              }}
+              value={period}
             >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── 1. Reward KPIs ─────────────────────────────────────────────── */}
-      <section className="mb-8">
-        <SectionTitle
-          title="Rewards Overview"
-          sub="Top-level metrics for gamification and incentives"
+              <option value="1">Today</option>
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="0">All time</option>
+            </Select>
+          }
+          description="Live XP, streak, weekly-goal, referral, and conversion data from the learner platform."
+          eyebrow="Engagement"
+          title="Rewards and goals"
         />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-          <KpiCard label="Coins distributed" value={fmt(REWARD_STATS.coinsDistributed)} sub="Given out as rewards" icon="ℙ" tone="bg-amber-500/10 text-amber-600" />
-          <KpiCard label="Rewards issued" value={fmt(REWARD_STATS.totalRewardsIssued)} sub="Total distinct payouts" icon="✦" tone="bg-primary/10 text-primary" />
-          <KpiCard label="Users rewarded" value={fmt(REWARD_STATS.usersRewardedThisMonth)} sub="Unique users in period" icon="♙" tone="bg-blue-500/10 text-blue-600" />
-          <KpiCard label="Avg reward value" value={fmt(REWARD_STATS.avgRewardValue)} sub="Coins per payout" icon="÷" tone="bg-violet-500/10 text-violet-600" />
-          <KpiCard label="Marketplace redeems" value={fmt(REWARD_STATS.marketplaceRedemptions)} sub="Items claimed by users" icon="🛍" tone="bg-emerald-500/10 text-emerald-600" />
-          <KpiCard label="Active campaigns" value={fmt(REWARD_STATS.activeCampaigns)} sub="Running promotions" icon="⚑" tone="bg-rose-500/10 text-rose-600" />
-          <KpiCard label="Streak bonuses" value={fmt(REWARD_STATS.streakBonuses)} sub="Hit by active users" icon="🔥" tone="bg-orange-500/10 text-orange-600" />
-          <KpiCard label="Referral payouts" value={fmt(REWARD_STATS.referralSignups)} sub="Signups rewarded" icon="⇒" tone="bg-indigo-500/10 text-indigo-600" />
-        </div>
-      </section>
 
-      {/* ── 2. Active Campaigns & Marketplace ──────────────────────────── */}
-      <section className="mb-8">
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Active Campaigns */}
-          <div>
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h2 className="text-foreground text-lg font-bold">Active Campaigns</h2>
-                <p className="text-muted-foreground mt-0.5 text-xs">Manage ongoing promotions</p>
-              </div>
-              <button type="button" className="bg-primary text-primary-foreground rounded-lg px-3 py-1.5 text-xs font-semibold">
-                + New Campaign
+        {query.isLoading ? (
+          <div className="text-muted-foreground flex min-h-64 items-center justify-center gap-2 text-xs">
+            <span className="border-primary size-5 animate-spin rounded-full border-2 border-t-transparent" />
+            Loading reward activity…
+          </div>
+        ) : query.isError || !data ? (
+          <SectionCard title="Reward data is unavailable">
+            <div className="py-8 text-center">
+              <p className="text-muted-foreground text-xs">
+                The live reward records could not be loaded.
+              </p>
+              <button
+                className="text-primary mt-3 text-xs font-bold"
+                onClick={() => query.refetch()}
+                type="button"
+              >
+                Try again
               </button>
             </div>
-            <div className="surface-card rounded-2xl p-5">
-              <div className="space-y-4">
-                {ACTIVE_CAMPAIGNS.map((c) => (
-                  <div key={c.id} className="border-border border-b pb-4 last:border-0 last:pb-0">
-                    <div className="mb-1.5 flex items-start justify-between">
-                      <div>
-                        <p className="text-foreground text-sm font-semibold">{c.name}</p>
-                        <p className="text-muted-foreground mt-0.5 text-[11px]">{c.type} · {fmt(c.participants)} participants</p>
+          </SectionCard>
+        ) : (
+          <>
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {rules.map((rule) => (
+                <MetricCard
+                  accent={rule.tone}
+                  detail={rule.detail}
+                  icon={rule.icon}
+                  key={rule.label}
+                  label={rule.label}
+                  value={rule.value}
+                />
+              ))}
+            </section>
+
+            <section className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]">
+              <SectionCard
+                actions={<StatusBadge tone="success">Live</StatusBadge>}
+                description="Daily participation and current streak health from recorded check-ins."
+                title="Check-in activity"
+              >
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {[
+                    [
+                      "Checked in today",
+                      number(data.checkIns.checkedInToday),
+                      `${data.checkIns.participationRate}% of active learners`,
+                    ],
+                    [
+                      "XP issued today",
+                      `${number(data.checkIns.xpIssuedToday)} XP`,
+                      `+${data.rules.dailyCheckInXp} XP per check-in`,
+                    ],
+                    [
+                      "Longest active streak",
+                      `${number(data.checkIns.longestActiveStreak)} days`,
+                      `Maintained by ${number(data.checkIns.longestStreakHolders)} learner${data.checkIns.longestStreakHolders === 1 ? "" : "s"}`,
+                    ],
+                  ].map(([label, value, detail]) => (
+                    <div
+                      className="border-border bg-surface-subtle/55 rounded-xl border p-3"
+                      key={label}
+                    >
+                      <p className="text-muted-foreground text-[.6rem] font-semibold">
+                        {label}
+                      </p>
+                      <p className="text-foreground mt-1.5 text-base font-bold">
+                        {value}
+                      </p>
+                      <p className="text-muted-foreground mt-1 text-[.58rem]">
+                        {detail}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 grid grid-cols-7 gap-2">
+                  {data.checkIns.daily.map((item) => (
+                    <div className="text-center" key={item.date}>
+                      <div className="bg-surface-subtle flex h-24 items-end overflow-hidden rounded-lg">
+                        <div
+                          className="from-primary to-primary/60 w-full rounded-t-md bg-gradient-to-t"
+                          style={{
+                            height: `${item.count ? Math.max(8, (item.count / maxCheckIns) * 100) : 0}%`,
+                          }}
+                          title={`${number(item.count)} check-ins`}
+                        />
                       </div>
-                      <StatusBadge status={c.status} />
+                      <p className="text-muted-foreground mt-1.5 text-[.55rem]">
+                        {item.label}
+                      </p>
                     </div>
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className="bg-surface-subtle text-muted-foreground rounded px-2 py-0.5 text-[10px] font-semibold">
-                        Pool: {fmt(c.coinsPool)} ℙ
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+                  ))}
+                </div>
+              </SectionCard>
 
-          {/* Marketplace Items */}
-          <div>
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h2 className="text-foreground text-lg font-bold">Marketplace Items</h2>
-                <p className="text-muted-foreground mt-0.5 text-xs">What users are spending coins on</p>
-              </div>
-              <button type="button" className="bg-primary text-primary-foreground rounded-lg px-3 py-1.5 text-xs font-semibold">
-                + Add Item
-              </button>
-            </div>
-            <div className="surface-card rounded-2xl p-5">
-              <div className="space-y-4">
-                {MARKETPLACE_ITEMS.map((item) => (
-                  <div key={item.name} className="border-border flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
-                    <div>
-                      <p className="text-foreground text-sm font-semibold">{item.name}</p>
-                      <p className="text-muted-foreground mt-0.5 text-[11px]">{fmt(item.redemptions)} total redemptions</p>
+              <SectionCard
+                description="How learner profiles are configured for the current week."
+                title="Weekly goal distribution"
+              >
+                <div className="space-y-4">
+                  {data.goals.distribution.map((goal) => (
+                    <div key={goal.label}>
+                      <div className="mb-1.5 flex items-center justify-between gap-3">
+                        <p className="text-foreground text-[.66rem] font-bold">
+                          {goal.label}
+                        </p>
+                        <p className="text-muted-foreground text-[.58rem]">
+                          {number(goal.count)} learners · {goal.percentage}%
+                        </p>
+                      </div>
+                      <div className="bg-surface-subtle h-2 overflow-hidden rounded-full">
+                        <div
+                          className="bg-primary h-full rounded-full"
+                          style={{ width: `${goal.percentage}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1.5">
-                      <span className="text-foreground text-xs font-bold">{fmt(item.cost)} ℙ</span>
-                      <StatusBadge status={item.status} />
-                    </div>
+                  ))}
+                </div>
+                <div className="border-border mt-5 grid grid-cols-2 gap-3 border-t pt-4">
+                  <div>
+                    <p className="text-muted-foreground text-[.58rem]">
+                      Goals completed this week
+                    </p>
+                    <p className="text-foreground mt-1 text-lg font-bold">
+                      {number(data.goals.completedThisWeek)}
+                    </p>
                   </div>
+                  <div>
+                    <p className="text-muted-foreground text-[.58rem]">
+                      Current completion rate
+                    </p>
+                    <p className="text-foreground mt-1 text-lg font-bold">
+                      {data.goals.completionRate}%
+                    </p>
+                  </div>
+                </div>
+              </SectionCard>
+            </section>
+
+            <SectionCard
+              description={`Latest ${period === "0" ? "all-time" : period === "1" ? "today's" : `${period}-day`} XP awards. Showing up to 250 recent records.`}
+              title="XP issuance ledger"
+            >
+              <div className="border-border mb-2 grid gap-2 border-y py-3 md:grid-cols-[1fr_190px_auto]">
+                <input
+                  className="border-border bg-background text-foreground placeholder:text-muted-foreground focus:border-primary h-9 rounded-xl border px-3 text-[.67rem] outline-none"
+                  onChange={(event) => {
+                    setQueryText(event.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search learner, email, source, or ledger ID"
+                  value={queryText}
+                />
+                <Select
+                  className="border-border bg-background text-foreground h-9 rounded-xl border px-3 text-[.65rem] outline-none"
+                  onChange={(event) => {
+                    setKind(event.target.value);
+                    setPage(1);
+                  }}
+                  value={kind}
+                >
+                  {[
+                    "All sources",
+                    "Check-in",
+                    "Quiz",
+                    "Referral",
+                    "Weekly goal",
+                    "Other",
+                  ].map((option) => (
+                    <option key={option}>{option}</option>
+                  ))}
+                </Select>
+                <button
+                  className="text-primary hover:bg-primary/10 h-9 rounded-xl px-3 text-[.63rem] font-bold"
+                  onClick={() => {
+                    setQueryText("");
+                    setKind("All sources");
+                    setPage(1);
+                  }}
+                  type="button"
+                >
+                  Reset filters
+                </button>
+              </div>
+
+              <div className="divide-border divide-y">
+                {visibleLedger.map((item) => (
+                  <article
+                    className="flex items-center gap-3 py-3"
+                    key={item.id}
+                  >
+                    <span className="bg-primary/10 text-primary grid size-9 shrink-0 place-items-center rounded-xl">
+                      <AdminIcon className="size-4" name="rewards" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-foreground text-[.68rem] font-bold">
+                          {item.learner}
+                        </p>
+                        <StatusBadge tone="neutral">{item.kind}</StatusBadge>
+                      </div>
+                      <p className="text-muted-foreground mt-1 truncate text-[.59rem]">
+                        {item.reason} · {sourceLabel(item.source)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-success text-[.68rem] font-bold">
+                        +{number(item.amount)} XP
+                      </p>
+                      <p className="text-muted-foreground mt-1 text-[.55rem]">
+                        {timestamp(item.createdAt)} · {item.id.slice(0, 8)}
+                      </p>
+                    </div>
+                  </article>
                 ))}
               </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* ── 3. Recent Rewards Issued ───────────────────────────────────── */}
-      <section className="mb-8">
-        <SectionTitle
-          title="Recent Activity"
-          sub="Latest coins issued or redeemed across the platform"
-        />
-        <div className="surface-card rounded-2xl p-5">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-border text-muted-foreground border-b text-xs">
-                  <th className="pb-3 font-medium">Log ID</th>
-                  <th className="pb-3 font-medium">User</th>
-                  <th className="pb-3 font-medium">Reason</th>
-                  <th className="pb-3 font-medium text-right">Amount</th>
-                  <th className="pb-3 font-medium text-right">Time</th>
-                </tr>
-              </thead>
-              <tbody className="divide-border divide-y">
-                {RECENT_REWARDS.map((rw) => (
-                  <tr key={rw.id} className="group transition-colors hover:bg-surface-subtle">
-                    <td className="py-3 pr-4">
-                      <p className="text-foreground font-semibold">{rw.id}</p>
-                    </td>
-                    <td className="py-3 pr-4">
-                      <p className="text-foreground text-xs font-semibold">{rw.user}</p>
-                    </td>
-                    <td className="py-3 pr-4">
-                      <p className="text-foreground text-[11px]">{rw.reason}</p>
-                    </td>
-                    <td className="py-3 pr-4 text-right">
-                      <span
-                        className={`font-bold ${
-                          rw.amount > 0 ? "text-emerald-600" : "text-rose-600"
-                        }`}
-                      >
-                        {rw.amount > 0 ? "+" : ""}
-                        {fmt(rw.amount)} ℙ
-                      </span>
-                    </td>
-                    <td className="text-muted-foreground py-3 text-right text-[11px]">
-                      {rw.date}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+              {!visibleLedger.length ? (
+                <div className="py-10 text-center">
+                  <p className="text-foreground text-xs font-bold">
+                    No matching XP records
+                  </p>
+                  <p className="text-muted-foreground mt-1 text-[.62rem]">
+                    No awards match this period and filter combination.
+                  </p>
+                </div>
+              ) : null}
+
+              <Pagination
+                currentPage={currentPage}
+                itemLabel="XP records"
+                onPageChange={setPage}
+                pageSize={PAGE_SIZE}
+                totalItems={filteredLedger.length}
+                totalPages={totalPages}
+              />
+            </SectionCard>
+          </>
+        )}
+      </div>
     </AdminShell>
   );
 }

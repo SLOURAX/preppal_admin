@@ -1,120 +1,88 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
+import {
+  ArrowDownToLine,
+  ArrowLeftRight,
+  ArrowRight,
+  ArrowUpFromLine,
+  CheckCircle2,
+  CircleDollarSign,
+  Clock3,
+  Coins,
+  Bot,
+  TrendingDown,
+  WalletCards,
+  type LucideIcon,
+} from "lucide-react";
 import { useState } from "react";
-import { AdminShell } from "@/components/layout";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { AdminPageHeader, SegmentedControl } from "@/components/admin-ui";
+import { AdminShell } from "@/components/layout";
+import { apiClient } from "@/lib/api/client";
 
 type Period = "7" | "30" | "90" | "180" | "0";
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+interface WalletResponse {
+  generatedAt: string;
+  period: Period;
+  stats: {
+    coinsCirculating: number;
+    activeWallets: number;
+    totalDepositedMinor: number;
+    totalWithdrawnMinor: number;
+    netLiquidityMinor: number;
+    averageDepositMinor: number;
+    averageWithdrawalMinor: number;
+    depositCount: number;
+    withdrawalCount: number;
+    pendingWithdrawalsCoins: number;
+    pendingWithdrawalsMinor: number;
+    pendingWithdrawalsCount: number;
+    depositedWalletBalanceMinor: number;
+    pendingWalletBalanceMinor: number;
+  };
+  flow: Array<{
+    date: string;
+    depositsMinor: number;
+    withdrawalsMinor: number;
+  }>;
+  recentTransactions: Array<{
+    id: string;
+    user: string;
+    email: string;
+    type: "Deposit" | "Withdrawal";
+    amountMinor: number;
+    coinAmount: number | null;
+    status: string;
+    createdAt: string;
+  }>;
+  topHolders: Array<{
+    id: string;
+    name: string;
+    balance: number;
+    plan: string;
+  }>;
+  insights: {
+    topHolderSharePercentage: number;
+    withdrawalToDepositPercentage: number;
+  };
+}
 
-const FINANCE_STATS = {
-  coinsCirculating: 2140300,
-  totalDeposited: 6100000,
-  totalWithdrawn: 4820000,
-  pendingWithdrawalsCoins: 124000,
-  pendingWithdrawalsCount: 18,
-  avgDepositSize: 12500,
-  avgWithdrawalSize: 18400,
-  activeWallets: 11420,
-};
-
-// Daily deposits and withdrawals (last 14 days)
-const FLOW_SERIES = [
-  { day: "09-09", deposits: 42000, withdrawals: 28000 },
-  { day: "09-10", deposits: 45000, withdrawals: 31000 },
-  { day: "09-11", deposits: 38000, withdrawals: 45000 },
-  { day: "09-12", deposits: 51000, withdrawals: 22000 },
-  { day: "09-13", deposits: 62000, withdrawals: 18000 },
-  { day: "09-14", deposits: 48000, withdrawals: 29000 },
-  { day: "09-15", deposits: 44000, withdrawals: 35000 },
-  { day: "09-16", deposits: 59000, withdrawals: 41000 },
-  { day: "09-17", deposits: 71000, withdrawals: 26000 },
-  { day: "09-18", deposits: 65000, withdrawals: 38000 },
-  { day: "09-19", deposits: 52000, withdrawals: 51000 },
-  { day: "09-20", deposits: 84000, withdrawals: 33000 },
-  { day: "09-21", deposits: 76000, withdrawals: 42000 },
-  { day: "09-22", deposits: 69000, withdrawals: 29000 },
-];
-
-const RECENT_TRANSACTIONS = [
-  {
-    id: "TX-9021",
-    user: "Amara Okafor",
-    type: "Deposit",
-    amount: 25000,
-    date: "2 mins ago",
-    status: "Completed",
-  },
-  {
-    id: "TX-9020",
-    user: "David Adebayo",
-    type: "Withdrawal",
-    amount: -14000,
-    date: "15 mins ago",
-    status: "Pending",
-  },
-  {
-    id: "TX-9019",
-    user: "Zainab Bello",
-    type: "Deposit",
-    amount: 10000,
-    date: "1 hour ago",
-    status: "Completed",
-  },
-  {
-    id: "TX-9018",
-    user: "Chinedu Okoro",
-    type: "Withdrawal",
-    amount: -28000,
-    date: "2 hours ago",
-    status: "Completed",
-  },
-  {
-    id: "TX-9017",
-    user: "Grace Mensah",
-    type: "Deposit",
-    amount: 5000,
-    date: "3 hours ago",
-    status: "Completed",
-  },
-  {
-    id: "TX-9016",
-    user: "Tunde Bakare",
-    type: "Deposit",
-    amount: 15000,
-    date: "3 hours ago",
-    status: "Failed",
-  },
-  {
-    id: "TX-9015",
-    user: "Maya Johnson",
-    type: "Withdrawal",
-    amount: -42000,
-    date: "5 hours ago",
-    status: "Completed",
-  },
-];
-
-const TOP_HOLDERS = [
-  { name: "Amara Okafor", balance: 142000, plan: "Pro" },
-  { name: "Maya Johnson", balance: 118500, plan: "Level 2" },
-  { name: "Zainab Bello", balance: 94200, plan: "Level 2" },
-  { name: "David Adebayo", balance: 88100, plan: "Pro" },
-  { name: "Aisha Ibrahim", balance: 76400, plan: "Level 2" },
-  { name: "Chinedu Okoro", balance: 64900, plan: "Level 1" },
-];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const fmt = (n: number) => n.toLocaleString("en-NG");
-const fmtNGN = (n: number) =>
+const fmt = (value: number) => value.toLocaleString("en-NG");
+const fmtNGN = (minor: number) =>
   new Intl.NumberFormat("en-NG", {
     style: "currency",
     currency: "NGN",
     maximumFractionDigits: 0,
-  }).format(n);
+  }).format(minor / 100);
+const dateTime = (value: string) =>
+  new Intl.DateTimeFormat("en-NG", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    hour12: true,
+  }).format(new Date(value));
 
 const PERIOD_OPTIONS: { value: Period; label: string }[] = [
   { value: "7", label: "Last 7 days" },
@@ -123,8 +91,6 @@ const PERIOD_OPTIONS: { value: Period; label: string }[] = [
   { value: "180", label: "Last 6 months" },
   { value: "0", label: "All time" },
 ];
-
-// ─── Reusable UI primitives ───────────────────────────────────────────────────
 
 function SectionTitle({ title, sub }: { title: string; sub: string }) {
   return (
@@ -146,14 +112,13 @@ function KpiCard({
   readonly value: string;
   readonly sub: string;
   readonly tone?: string;
-  readonly icon: string;
+  readonly icon: LucideIcon;
 }) {
+  const Icon = icon;
   return (
     <article className="surface-card relative overflow-hidden rounded-2xl p-4">
-      <span
-        className={`grid size-9 place-items-center rounded-xl text-base ${tone}`}
-      >
-        {icon}
+      <span className={`grid size-9 place-items-center rounded-xl ${tone}`}>
+        <Icon className="size-[17px]" strokeWidth={1.9} />
       </span>
       <p className="text-foreground mt-3 text-xl font-bold">{value}</p>
       <p className="text-foreground text-[.75rem] font-medium">{label}</p>
@@ -164,16 +129,13 @@ function KpiCard({
 
 function PlanBadge({ plan }: { readonly plan: string }) {
   const styles: Record<string, string> = {
-    Free: "bg-surface-subtle text-muted-foreground",
-    "Level 1": "bg-blue-500/10 text-blue-600",
-    "Level 2": "bg-violet-500/10 text-violet-600",
-    Pro: "bg-amber-500/10 text-amber-600",
+    Free: "bg-slate-500/10 text-slate-600",
+    "Monthly Premium": "bg-violet-500/10 text-violet-600",
+    "Annual Premium": "bg-amber-500/10 text-amber-600",
   };
   return (
     <span
-      className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
-        styles[plan] ?? "bg-surface-subtle text-muted-foreground"
-      }`}
+      className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${styles[plan] ?? "bg-primary/10 text-primary"}`}
     >
       {plan}
     </span>
@@ -185,317 +147,354 @@ function StatusBadge({ status }: { readonly status: string }) {
     Completed: "bg-emerald-500/10 text-emerald-600",
     Pending: "bg-amber-500/10 text-amber-600",
     Failed: "bg-rose-500/10 text-rose-600",
+    Expired: "bg-slate-500/10 text-slate-600",
+    Refunded: "bg-blue-500/10 text-blue-600",
   };
   return (
     <span
-      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-        styles[status] ?? "bg-surface-subtle text-muted-foreground"
-      }`}
+      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${styles[status] ?? "bg-surface-subtle text-muted-foreground"}`}
     >
       {status}
     </span>
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default function WalletOverviewPage() {
   const [period, setPeriod] = useState<Period>("30");
-
-  const days = period === "0" ? 14 : Math.min(Number(period), 14);
-  const flowSlice = FLOW_SERIES.slice(-days);
-
+  const query = useQuery({
+    queryKey: ["admin", "wallets", period],
+    queryFn: () =>
+      apiClient<WalletResponse>(`/api/v1/admin/wallets?period=${period}`),
+  });
+  const data = query.data;
   const maxFlow = Math.max(
-    ...flowSlice.map((f) => Math.max(f.deposits, f.withdrawals)),
+    1,
+    ...(data?.flow.map((item) =>
+      Math.max(item.depositsMinor, item.withdrawalsMinor),
+    ) ?? [1]),
   );
-
-  const netFlow = FINANCE_STATS.totalDeposited - FINANCE_STATS.totalWithdrawn;
 
   return (
     <AdminShell>
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <span className="text-primary text-[10px] font-bold tracking-widest uppercase">
-            Finance & Economy
-          </span>
-          <h1 className="text-foreground mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
-            Wallet Overview
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Monitor platform liquidity, coin circulation, and transaction flows.
+      <AdminPageHeader
+        actions={
+          <SegmentedControl
+            ariaLabel="Wallet reporting period"
+            onChange={setPeriod}
+            options={PERIOD_OPTIONS}
+            value={period}
+          />
+        }
+        className="mb-6"
+        description="Live wallet balances, settled deposits, payouts, and liquidity from the platform ledger."
+        eyebrow="Commerce"
+        title="Wallet overview"
+      />
+
+      {query.isLoading ? (
+        <div className="text-muted-foreground flex min-h-72 items-center justify-center gap-2 text-xs">
+          <span className="border-primary size-5 animate-spin rounded-full border-2 border-t-transparent" />
+          Loading wallet activity…
+        </div>
+      ) : query.isError || !data ? (
+        <div className="surface-card rounded-2xl p-10 text-center">
+          <p className="text-foreground text-sm font-bold">
+            Wallet data is unavailable
           </p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            The live wallet records could not be loaded.
+          </p>
+          <button
+            className="text-primary mt-3 text-xs font-bold"
+            onClick={() => query.refetch()}
+            type="button"
+          >
+            Try again
+          </button>
         </div>
-        <div className="bg-surface-subtle/80 flex w-fit items-center gap-1 rounded-full p-1">
-          {PERIOD_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setPeriod(opt.value)}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
-                period === opt.value
-                  ? "bg-surface text-primary shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── 1. Wallet KPIs ─────────────────────────────────────────────── */}
-      <section className="mb-8">
-        <SectionTitle
-          title="Wallet Health"
-          sub="Top-level financial indicators across the entire platform"
-        />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-          <KpiCard
-            label="Coins in circulation"
-            value={fmt(FINANCE_STATS.coinsCirculating)}
-            sub="Total unspent balances"
-            icon="ℙ"
-            tone="bg-amber-500/10 text-amber-600"
-          />
-          <KpiCard
-            label="Active wallets"
-            value={fmt(FINANCE_STATS.activeWallets)}
-            sub="Wallets with balance > 0"
-            icon="◈"
-            tone="bg-primary/10 text-primary"
-          />
-          <KpiCard
-            label="Net liquidity"
-            value={fmtNGN(netFlow)}
-            sub="Deposits minus withdrawals"
-            icon="⇌"
-            tone="bg-emerald-500/10 text-emerald-600"
-          />
-          <KpiCard
-            label="Pending withdrawals"
-            value={fmt(FINANCE_STATS.pendingWithdrawalsCount)}
-            sub={`${fmt(FINANCE_STATS.pendingWithdrawalsCoins)} coins total`}
-            icon="↗"
-            tone="bg-amber-500/10 text-amber-600"
-          />
-          <KpiCard
-            label="Total deposited"
-            value={fmtNGN(FINANCE_STATS.totalDeposited)}
-            sub="All-time fiat deposits"
-            icon="↙"
-            tone="bg-emerald-500/10 text-emerald-600"
-          />
-          <KpiCard
-            label="Total withdrawn"
-            value={fmtNGN(FINANCE_STATS.totalWithdrawn)}
-            sub="All-time fiat withdrawals"
-            icon="↗"
-            tone="bg-rose-500/10 text-rose-600"
-          />
-          <KpiCard
-            label="Avg deposit size"
-            value={fmtNGN(FINANCE_STATS.avgDepositSize)}
-            sub="Per transaction"
-            icon="↘"
-            tone="bg-emerald-500/10 text-emerald-600"
-          />
-          <KpiCard
-            label="Avg withdrawal size"
-            value={fmtNGN(FINANCE_STATS.avgWithdrawalSize)}
-            sub="Per transaction"
-            icon="↖"
-            tone="bg-rose-500/10 text-rose-600"
-          />
-        </div>
-      </section>
-
-      {/* ── 2. Coin Flow Chart ───────────────────────────────────────────── */}
-      <section className="mb-8">
-        <SectionTitle
-          title="Coin flow velocity"
-          sub="Daily deposits vs. withdrawals (in coins)"
-        />
-        <div className="surface-card rounded-2xl p-5">
-          <div className="flex items-end gap-2" style={{ height: 160 }}>
-            {flowSlice.map(({ day, deposits, withdrawals }) => (
-              <div
-                key={day}
-                className="group relative flex flex-1 flex-col items-center gap-1"
-              >
-                <div
-                  className="flex w-full items-end gap-px"
-                  style={{ height: 140 }}
-                >
-                  <div
-                    className="flex-1 rounded-t-sm bg-emerald-500/80 transition-all hover:bg-emerald-500"
-                    style={{ height: `${(deposits / maxFlow) * 140}px` }}
-                    title={`${day} Deposits: ${fmt(deposits)}`}
-                  />
-                  <div
-                    className="flex-1 rounded-t-sm bg-rose-500/70 transition-all hover:bg-rose-500"
-                    style={{ height: `${(withdrawals / maxFlow) * 140}px` }}
-                    title={`${day} Withdrawals: ${fmt(withdrawals)}`}
-                  />
-                </div>
-                <span className="text-muted-foreground text-[9px]">{day}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-5 flex items-center justify-center gap-6">
-            <div className="flex items-center gap-1.5">
-              <span className="inline-block size-3 rounded-sm bg-emerald-500/80" />
-              <span className="text-muted-foreground text-[11px] font-semibold">
-                Deposits
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="inline-block size-3 rounded-sm bg-rose-500/70" />
-              <span className="text-muted-foreground text-[11px] font-semibold">
-                Withdrawals
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── 3. Recent Transactions & Top Holders ─────────────────────────── */}
-      <section className="mb-8">
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Recent transactions */}
-          <div className="lg:col-span-2">
+      ) : (
+        <>
+          <section className="mb-8">
             <SectionTitle
-              title="Recent large transactions"
-              sub="Monitoring high-value movements > 5,000 coins"
+              title="Wallet health"
+              sub="Balances are current; transaction KPIs follow the selected reporting period"
+            />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+              <KpiCard
+                label="Coins in circulation"
+                value={fmt(data.stats.coinsCirculating)}
+                sub="Current withdrawable balances"
+                icon={Coins}
+                tone="bg-amber-500/10 text-amber-600"
+              />
+              <KpiCard
+                label="Active wallets"
+                value={fmt(data.stats.activeWallets)}
+                sub="Wallets with a non-zero balance"
+                icon={WalletCards}
+              />
+              <KpiCard
+                label="Net settled flow"
+                value={fmtNGN(data.stats.netLiquidityMinor)}
+                sub="Deposits minus successful payouts"
+                icon={ArrowLeftRight}
+                tone="bg-emerald-500/10 text-emerald-600"
+              />
+              <KpiCard
+                label="Pending withdrawals"
+                value={fmt(data.stats.pendingWithdrawalsCount)}
+                sub={`${fmt(data.stats.pendingWithdrawalsCoins)} coins · ${fmtNGN(data.stats.pendingWithdrawalsMinor)}`}
+                icon={Clock3}
+                tone="bg-amber-500/10 text-amber-600"
+              />
+              <KpiCard
+                label="Settled deposits"
+                value={fmtNGN(data.stats.totalDepositedMinor)}
+                sub={`${fmt(data.stats.depositCount)} transactions in period`}
+                icon={ArrowDownToLine}
+                tone="bg-emerald-500/10 text-emerald-600"
+              />
+              <KpiCard
+                label="Settled withdrawals"
+                value={fmtNGN(data.stats.totalWithdrawnMinor)}
+                sub={`${fmt(data.stats.withdrawalCount)} payouts in period`}
+                icon={ArrowUpFromLine}
+                tone="bg-rose-500/10 text-rose-600"
+              />
+              <KpiCard
+                label="Average deposit"
+                value={fmtNGN(data.stats.averageDepositMinor)}
+                sub="Per settled wallet deposit"
+                icon={CircleDollarSign}
+                tone="bg-emerald-500/10 text-emerald-600"
+              />
+              <KpiCard
+                label="Average withdrawal"
+                value={fmtNGN(data.stats.averageWithdrawalMinor)}
+                sub="Per completed payout"
+                icon={TrendingDown}
+                tone="bg-rose-500/10 text-rose-600"
+              />
+            </div>
+          </section>
+
+          <section className="mb-8">
+            <SectionTitle
+              title="Settled cash flow"
+              sub="Daily successful wallet deposits versus completed payouts in naira"
             />
             <div className="surface-card rounded-2xl p-5">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-border text-muted-foreground border-b text-xs">
-                      <th className="pb-3 font-medium">Transaction</th>
-                      <th className="pb-3 font-medium">User</th>
-                      <th className="pb-3 text-right font-medium">Amount</th>
-                      <th className="pb-3 text-center font-medium">Status</th>
-                      <th className="pb-3 text-right font-medium">Time</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-border divide-y">
-                    {RECENT_TRANSACTIONS.map((tx) => (
-                      <tr
-                        key={tx.id}
-                        className="group hover:bg-surface-subtle transition-colors"
-                      >
-                        <td className="py-3 pr-4">
-                          <p className="text-foreground font-semibold">
-                            {tx.id}
-                          </p>
-                          <p className="text-muted-foreground text-[10px]">
-                            {tx.type}
-                          </p>
-                        </td>
-                        <td className="py-3 pr-4">
-                          <p className="text-foreground text-xs font-semibold">
-                            {tx.user}
-                          </p>
-                        </td>
-                        <td className="py-3 pr-4 text-right">
-                          <span
-                            className={`font-bold ${
-                              tx.amount > 0
-                                ? "text-emerald-600"
-                                : "text-rose-600"
-                            }`}
-                          >
-                            {tx.amount > 0 ? "+" : ""}
-                            {fmt(tx.amount)} ℙ
-                          </span>
-                        </td>
-                        <td className="py-3 pr-4 text-center">
-                          <StatusBadge status={tx.status} />
-                        </td>
-                        <td className="text-muted-foreground py-3 text-right text-[11px]">
-                          {tx.date}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          {/* Top Holders */}
-          <div>
-            <SectionTitle
-              title="Top coin holders"
-              sub="Users with the largest wallet balances"
-            />
-            <div className="surface-card rounded-2xl p-5">
-              <div className="divide-border divide-y">
-                {TOP_HOLDERS.map((h, i) => (
-                  <div key={h.name} className="flex items-center gap-3 py-2.5">
-                    <span className="text-muted-foreground w-4 shrink-0 text-center text-xs font-bold">
-                      {i + 1}
+              <div className="flex h-44 items-end gap-1.5 overflow-x-auto">
+                {data.flow.map((item) => (
+                  <div
+                    className="flex min-w-4 flex-1 flex-col items-center gap-1"
+                    key={item.date}
+                  >
+                    <div className="flex h-36 w-full items-end gap-px">
+                      <div
+                        className="flex-1 rounded-t-sm bg-emerald-500/80 transition-colors hover:bg-emerald-500"
+                        style={{
+                          height: `${item.depositsMinor ? Math.max(3, (item.depositsMinor / maxFlow) * 140) : 0}px`,
+                        }}
+                        title={`${item.date} deposits: ${fmtNGN(item.depositsMinor)}`}
+                      />
+                      <div
+                        className="flex-1 rounded-t-sm bg-rose-500/70 transition-colors hover:bg-rose-500"
+                        style={{
+                          height: `${item.withdrawalsMinor ? Math.max(3, (item.withdrawalsMinor / maxFlow) * 140) : 0}px`,
+                        }}
+                        title={`${item.date} withdrawals: ${fmtNGN(item.withdrawalsMinor)}`}
+                      />
+                    </div>
+                    <span className="text-muted-foreground text-[8px]">
+                      {item.date.slice(5)}
                     </span>
-                    <div className="bg-primary/10 text-primary grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold">
-                      {h.name.slice(0, 1)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-foreground truncate text-xs font-semibold">
-                        {h.name}
-                      </p>
-                      <PlanBadge plan={h.plan} />
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs font-bold text-amber-600">
-                        {fmt(h.balance)} ℙ
-                      </span>
-                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-5 flex items-center justify-center gap-6">
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-block size-3 rounded-sm bg-emerald-500/80" />
+                  <span className="text-muted-foreground text-[11px] font-semibold">
+                    Deposits
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-block size-3 rounded-sm bg-rose-500/70" />
+                  <span className="text-muted-foreground text-[11px] font-semibold">
+                    Withdrawals
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="mb-8">
+            <div className="grid gap-6 lg:grid-cols-3">
+              <div className="lg:col-span-2">
+                <SectionTitle
+                  title="Recent wallet transactions"
+                  sub="Latest deposits and withdrawal requests across all statuses"
+                />
+                <div className="surface-card rounded-2xl p-5">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-border text-muted-foreground border-b text-xs">
+                          <th className="pb-3 font-medium">Transaction</th>
+                          <th className="pb-3 font-medium">User</th>
+                          <th className="pb-3 text-right font-medium">
+                            Amount
+                          </th>
+                          <th className="pb-3 text-center font-medium">
+                            Status
+                          </th>
+                          <th className="pb-3 text-right font-medium">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-border divide-y">
+                        {data.recentTransactions.map((transaction) => (
+                          <tr
+                            className="hover:bg-surface-subtle transition-colors"
+                            key={`${transaction.type}-${transaction.id}`}
+                          >
+                            <td className="py-3 pr-4">
+                              <p className="text-foreground font-semibold">
+                                {transaction.id.slice(0, 8)}
+                              </p>
+                              <p className="text-muted-foreground text-[10px]">
+                                {transaction.type}
+                              </p>
+                            </td>
+                            <td className="py-3 pr-4">
+                              <p className="text-foreground text-xs font-semibold">
+                                {transaction.user}
+                              </p>
+                              <p className="text-muted-foreground text-[10px]">
+                                {transaction.email}
+                              </p>
+                            </td>
+                            <td className="py-3 pr-4 text-right">
+                              <span
+                                className={`font-bold ${transaction.amountMinor >= 0 ? "text-emerald-600" : "text-rose-600"}`}
+                              >
+                                {transaction.amountMinor >= 0 ? "+" : "−"}
+                                {fmtNGN(Math.abs(transaction.amountMinor))}
+                              </span>
+                              {transaction.coinAmount ? (
+                                <p className="text-muted-foreground text-[9px]">
+                                  {fmt(transaction.coinAmount)} coins
+                                </p>
+                              ) : null}
+                            </td>
+                            <td className="py-3 pr-4 text-center">
+                              <StatusBadge status={transaction.status} />
+                            </td>
+                            <td className="text-muted-foreground py-3 text-right text-[10px]">
+                              {dateTime(transaction.createdAt)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {!data.recentTransactions.length ? (
+                    <p className="text-muted-foreground py-10 text-center text-xs">
+                      No wallet transactions have been recorded yet.
+                    </p>
+                  ) : null}
+                  <Link
+                    className="text-primary border-border mt-3 inline-flex items-center gap-1.5 border-t pt-3 text-[.64rem] font-bold"
+                    href="/finance/deposits"
+                  >
+                    View all payments <ArrowRight className="size-3.5" />
+                  </Link>
+                </div>
+              </div>
+
+              <div>
+                <SectionTitle
+                  title="Top coin holders"
+                  sub="Largest current withdrawable balances"
+                />
+                <div className="surface-card rounded-2xl p-5">
+                  <div className="divide-border divide-y">
+                    {data.topHolders.map((holder, index) => (
+                      <div
+                        className="flex items-center gap-3 py-2.5"
+                        key={holder.id}
+                      >
+                        <span className="text-muted-foreground w-4 shrink-0 text-center text-xs font-bold">
+                          {index + 1}
+                        </span>
+                        <div className="bg-primary/10 text-primary grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold">
+                          {holder.name.slice(0, 1)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-foreground truncate text-xs font-semibold">
+                            {holder.name}
+                          </p>
+                          <PlanBadge plan={holder.plan} />
+                        </div>
+                        <span className="text-right text-xs font-bold text-amber-600">
+                          {fmt(holder.balance)} coins
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {!data.topHolders.length ? (
+                    <p className="text-muted-foreground py-8 text-center text-xs">
+                      No funded wallets yet.
+                    </p>
+                  ) : null}
+                  <Link
+                    className="text-primary border-border mt-3 inline-flex items-center gap-1.5 border-t pt-3 text-[.64rem] font-bold"
+                    href="/users"
+                  >
+                    View all learners <ArrowRight className="size-3.5" />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="mb-2">
+            <div className="surface-card via-surface to-surface rounded-2xl border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 p-5 sm:p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <span className="grid size-10 place-items-center rounded-xl bg-emerald-500 text-white">
+                  <Bot className="size-[18px]" strokeWidth={1.9} />
+                </span>
+                <div>
+                  <p className="text-foreground font-bold">
+                    Wallet risk and insights
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    Calculated from the selected settled transaction window
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {[
+                  `Withdrawals are ${data.insights.withdrawalToDepositPercentage}% of settled deposits for this period.`,
+                  `${fmt(data.stats.pendingWithdrawalsCount)} withdrawal request${data.stats.pendingWithdrawalsCount === 1 ? " is" : "s are"} awaiting settlement, worth ${fmt(data.stats.pendingWithdrawalsCoins)} coins.`,
+                  `The six largest visible balances hold ${data.insights.topHolderSharePercentage}% of circulating coins.`,
+                  `${fmtNGN(data.stats.depositedWalletBalanceMinor)} remains in spend-only deposited balances across learner wallets.`,
+                ].map((insight) => (
+                  <div
+                    className="bg-surface/60 flex items-start gap-3 rounded-xl p-3"
+                    key={insight}
+                  >
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                    <p className="text-foreground text-xs leading-5">
+                      {insight}
+                    </p>
                   </div>
                 ))}
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── 4. Automated insights panel ─────────────────────────────────── */}
-      <section className="mb-2">
-        <div className="surface-card via-surface to-surface rounded-2xl border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 p-5 sm:p-6">
-          <div className="mb-4 flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-emerald-500 text-lg text-white">
-              ✧
-            </span>
-            <div>
-              <p className="text-foreground font-bold">
-                Wallet Risk & Insights
-              </p>
-              <p className="text-muted-foreground text-xs">
-                Automated liquidity and compliance signals
-              </p>
-            </div>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {[
-              "Liquidity is extremely healthy. Net deposits outpace withdrawals by 26%.",
-              "18 pending withdrawals detected. Average approval time is currently 1.4 hours.",
-              "No suspicious wallet accumulation detected. Top 10 holders account for <3% of total circulating supply.",
-              "Deposit velocity spiked 18% over the last 3 days — closely correlating with the new Level 2 plan rollouts.",
-            ].map((insight) => (
-              <div
-                key={insight}
-                className="bg-surface/60 flex items-start gap-3 rounded-xl p-3"
-              >
-                <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-emerald-500/20 text-[10px] text-emerald-600">
-                  •
-                </span>
-                <p className="text-foreground text-xs leading-5">{insight}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+          </section>
+        </>
+      )}
     </AdminShell>
   );
 }

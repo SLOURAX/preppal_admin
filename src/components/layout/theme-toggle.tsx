@@ -1,5 +1,6 @@
 "use client";
 
+import { Monitor, Moon, Sun, type LucideIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useSyncExternalStore } from "react";
 
@@ -8,39 +9,13 @@ import { cn } from "@/lib/utils";
 type ThemeName = "dark" | "light" | "system";
 
 function ThemeIcon({ name }: { readonly name: ThemeName }) {
-  const common = {
-    fill: "none",
-    stroke: "currentColor",
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    strokeWidth: 1.8,
+  const icons: Record<ThemeName, LucideIcon> = {
+    dark: Moon,
+    light: Sun,
+    system: Monitor,
   };
-
-  return (
-    <svg aria-hidden="true" className="size-3.5" viewBox="0 0 24 24">
-      {name === "light" ? (
-        <>
-          <circle {...common} cx="12" cy="12" r="3.5" />
-          <path
-            {...common}
-            d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
-          />
-        </>
-      ) : null}
-      {name === "system" ? (
-        <>
-          <rect {...common} height="12" rx="1.5" width="16" x="4" y="4" />
-          <path {...common} d="M8 20h8M12 16v4" />
-        </>
-      ) : null}
-      {name === "dark" ? (
-        <path
-          {...common}
-          d="M20.3 15.6A8.6 8.6 0 0 1 8.4 3.7 8.6 8.6 0 1 0 20.3 15.6Z"
-        />
-      ) : null}
-    </svg>
-  );
+  const Icon = icons[name];
+  return <Icon aria-hidden="true" className="size-3.5" strokeWidth={1.8} />;
 }
 
 export function ThemeToggle() {

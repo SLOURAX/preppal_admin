@@ -1,49 +1,55 @@
 import type { AdminIconName } from "@/components/ui";
 
 export const ADMIN_NAVIGATION: ReadonlyArray<{
-  readonly group: "Finance" | "Management" | "Monitoring" | "System" | null;
+  readonly group:
+    "Commerce" | "Content" | "Insights" | "Learners" | "System" | null;
   readonly href: string;
   readonly icon: AdminIconName;
   readonly label: string;
 }> = [
   { label: "Overview", href: "/dashboard", icon: "dashboard", group: null },
-  { label: "Users", href: "/users", icon: "users", group: "Management" },
+  { label: "Learners", href: "/users", icon: "users", group: "Learners" },
   {
-    label: "Quizzes & exams",
+    label: "Questions & exams",
     href: "/quizzes",
     icon: "content",
-    group: "Management",
+    group: "Content",
   },
   {
     label: "Blog management",
     href: "/content",
     icon: "blog",
-    group: "Management",
+    group: "Content",
   },
-  { label: "Rewards", href: "/rewards", icon: "rewards", group: "Management" },
   {
-    label: "Wallet overview",
+    label: "Rewards & goals",
+    href: "/rewards",
+    icon: "rewards",
+    group: "Learners",
+  },
+  {
+    label: "Wallets",
     href: "/finance",
     icon: "finance",
-    group: "Finance",
+    group: "Commerce",
   },
   {
     label: "Withdrawals",
     href: "/finance/withdrawals",
     icon: "withdrawals",
-    group: "Finance",
+    group: "Commerce",
   },
   {
-    label: "Deposits",
+    label: "Payments",
     href: "/finance/deposits",
     icon: "deposits",
-    group: "Finance",
+    group: "Commerce",
   },
   {
     label: "Analytics",
     href: "/analytics",
     icon: "analytics",
-    group: "Monitoring",
+    group: "Insights",
   },
   { label: "Settings", href: "/settings", icon: "settings", group: "System" },
 ];

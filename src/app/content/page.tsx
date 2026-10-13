@@ -1,525 +1,368 @@
 "use client";
 
-import { useMemo, useState, type SVGProps } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  ArrowRight,
+  Check,
+  Eye,
+  Flag,
+  ImageIcon,
+  MessageCircle,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import Image from "next/image";
+import { useMemo, useState } from "react";
 
+import { Pagination } from "@/components/admin-ui";
+import { RichContentEditor } from "@/components/rich-content-editor";
 import { AdminShell } from "@/components/layout";
-import { AdminIcon } from "@/components/ui";
+import { AdminIcon, Select } from "@/components/ui";
+import { apiClient } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
 type WorkspaceTab = "overview" | "posts" | "editor" | "discussions" | "media";
-type PostStatus = "Published" | "Draft" | "Scheduled" | "In review";
-type DiscussionStatus = "Approved" | "Pending" | "Flagged" | "Hidden";
+type PostStatus =
+  "DRAFT" | "IN_REVIEW" | "SCHEDULED" | "PUBLISHED" | "ARCHIVED";
+type DiscussionStatus = "PENDING" | "APPROVED" | "FLAGGED" | "HIDDEN";
 
 interface BlogPost {
-  readonly author: string;
-  readonly category: string;
-  readonly comments: number;
-  readonly excerpt: string;
-  readonly featured?: boolean;
-  readonly id: string;
-  readonly likes: number;
-  readonly publishedAt: string;
-  readonly readTime: string;
-  readonly slug: string;
-  readonly status: PostStatus;
-  readonly title: string;
-  readonly tone: string;
-  readonly updatedAt: string;
-  readonly views: number;
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string;
+  content: string[];
+  category: string;
+  authorName: string;
+  coverImageUrl: string | null;
+  coverImageAlt: string | null;
+  tags: string[];
+  readTimeMinutes: number;
+  status: PostStatus;
+  featured: boolean;
+  viewCount: number;
+  likeCount: number;
+  commentCount: number;
+  publishedAt: string | null;
+  scheduledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
-interface Discussion {
-  readonly article: string;
-  readonly author: string;
-  readonly avatar: string;
-  readonly id: string;
-  readonly message: string;
+interface BlogComment {
+  id: string;
+  postId: string;
+  articleTitle: string;
+  authorName: string;
+  avatarUrl: string | null;
+  body: string;
   status: DiscussionStatus;
-  readonly time: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-type BlogIconName =
-  | "calendar"
-  | "check"
-  | "chevron"
-  | "clock"
-  | "comment"
-  | "edit"
-  | "eye"
-  | "flag"
-  | "heart"
-  | "image"
-  | "link"
-  | "more"
-  | "plus"
-  | "search"
-  | "trash"
-  | "upload"
-  | "x";
+interface BlogMedia {
+  id: string;
+  name: string;
+  url: string;
+  mimeType: string;
+  sizeBytes: number;
+  width: number | null;
+  height: number | null;
+  altText: string | null;
+  usageCount: number;
+  createdAt: string;
+}
 
-const POSTS: readonly BlogPost[] = [
-  {
-    id: "post-001",
-    title: "How AI explanations can turn a wrong answer into understanding",
-    slug: "ai-explanations-that-build-understanding",
-    excerpt:
-      "The best feedback does more than reveal the answer. It helps learners recognise the reasoning pattern they can reuse next time.",
-    category: "AI & Learning",
-    author: "Preppal Learning Team",
-    status: "Published",
-    publishedAt: "2 Sep 2026 · 9:30 AM",
-    updatedAt: "2 Sep 2026",
-    readTime: "6 min",
-    views: 12840,
-    likes: 284,
-    comments: 38,
-    featured: true,
-    tone: "from-[#29176e] via-[#5b35f5] to-[#9b80ff]",
-  },
-  {
-    id: "post-002",
-    title: "A practical seven-day plan for focused exam preparation",
-    slug: "seven-day-exam-preparation-plan",
-    excerpt:
-      "Use short practice sessions, deliberate review, and realistic targets to make the final week count.",
-    category: "Study Skills",
-    author: "Dr. Nneka Adeyemi",
-    status: "Published",
-    publishedAt: "1 Sep 2026 · 2:15 PM",
-    updatedAt: "1 Sep 2026",
-    readTime: "5 min",
-    views: 9340,
-    likes: 196,
-    comments: 24,
-    tone: "from-[#0f5f5a] via-[#159978] to-[#7fd7b7]",
-  },
-  {
-    id: "post-003",
-    title: "New reward milestones make consistent practice more valuable",
-    slug: "new-reward-milestones",
-    excerpt:
-      "A closer look at the clearer progress milestones now available to every learner.",
-    category: "Rewards",
-    author: "Preppal Product Team",
-    status: "Scheduled",
-    publishedAt: "8 Oct 2026 · 10:00 AM",
-    updatedAt: "Today · 10:42 AM",
-    readTime: "3 min",
-    views: 0,
-    likes: 0,
-    comments: 0,
-    tone: "from-[#9a4c0d] via-[#f38a22] to-[#ffd182]",
-  },
-  {
-    id: "post-004",
-    title: "Why learning with friends can improve consistency",
-    slug: "learning-together-improves-consistency",
-    excerpt:
-      "Accountability and shared goals can make a study routine much easier to maintain.",
-    category: "Community",
-    author: "Tomi Akinwale",
-    status: "In review",
-    publishedAt: "Not published",
-    updatedAt: "Today · 9:18 AM",
-    readTime: "4 min",
-    views: 0,
-    likes: 0,
-    comments: 0,
-    tone: "from-[#174a91] via-[#2378db] to-[#8fc3ff]",
-  },
-  {
-    id: "post-005",
-    title: "Retrieval practice: why testing yourself beats rereading",
-    slug: "retrieval-practice-beats-rereading",
-    excerpt:
-      "Trying to recall information strengthens memory and reveals the gaps familiar notes can hide.",
-    category: "Study Skills",
-    author: "Preppal Learning Team",
-    status: "Draft",
-    publishedAt: "Not published",
-    updatedAt: "Yesterday · 4:05 PM",
-    readTime: "5 min",
-    views: 0,
-    likes: 0,
-    comments: 0,
-    tone: "from-[#642161] via-[#bd4aae] to-[#f2a5df]",
-  },
-] as const;
+interface BlogResponse {
+  generatedAt: string;
+  metrics: {
+    totalArticles: number;
+    published: number;
+    drafts: number;
+    scheduled: number;
+    editorialQueue: number;
+    totalViews: number;
+    discussions: number;
+    pendingDiscussions: number;
+    flaggedDiscussions: number;
+    approvedDiscussions: number;
+    hiddenDiscussions: number;
+  };
+  featured: BlogPost | null;
+  queue: BlogPost[];
+  topStories: BlogPost[];
+  posts: BlogPost[];
+  comments: BlogComment[];
+  media: BlogMedia[];
+}
 
-const INITIAL_DISCUSSIONS: Discussion[] = [
-  {
-    id: "comment-001",
-    author: "Ada M.",
-    avatar: "AM",
-    article: "How AI explanations can turn a wrong answer into understanding",
-    message:
-      "This is a useful way to think about reviewing mistakes. I’m going to try it in my next practice session.",
-    time: "12 min ago",
-    status: "Pending",
-  },
-  {
-    id: "comment-002",
-    author: "Daniel O.",
-    avatar: "DO",
-    article: "A practical seven-day plan for focused exam preparation",
-    message:
-      "The practical examples made the routine much easier to understand and apply.",
-    time: "38 min ago",
-    status: "Approved",
-  },
-  {
-    id: "comment-003",
-    author: "Ifeanyi K.",
-    avatar: "IK",
-    article: "New reward milestones make consistent practice more valuable",
-    message:
-      "Can we also get a breakdown of how the weekly goal contributes to XP?",
-    time: "2 hours ago",
-    status: "Pending",
-  },
-  {
-    id: "comment-004",
-    author: "Anonymous user",
-    avatar: "AU",
-    article: "Why learning with friends can improve consistency",
-    message:
-      "This comment was automatically flagged because it may violate the community rules.",
-    time: "Yesterday",
-    status: "Flagged",
-  },
-];
+interface SavePostInput {
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string[];
+  category: string;
+  authorName: string;
+  coverImageUrl?: string;
+  coverImageAlt?: string;
+  tags: string[];
+  readTimeMinutes: number;
+  status: PostStatus;
+  featured: boolean;
+  scheduledAt?: string;
+}
 
-const MEDIA = [
-  {
-    id: "media-1",
-    name: "ai-study-support.png",
-    meta: "1600 × 900 · 824 KB",
-    used: "Featured cover",
-    tone: "from-[#27156b] via-[#6240f8] to-[#b49fff]",
-  },
-  {
-    id: "media-2",
-    name: "exam-preparation.png",
-    meta: "1600 × 900 · 691 KB",
-    used: "2 articles",
-    tone: "from-[#0f5c58] via-[#1da77e] to-[#a2e4cc]",
-  },
-  {
-    id: "media-3",
-    name: "learning-rewards.png",
-    meta: "1600 × 900 · 742 KB",
-    used: "1 article",
-    tone: "from-[#98440c] via-[#f38420] to-[#ffd9a2]",
-  },
-  {
-    id: "media-4",
-    name: "learner-community.png",
-    meta: "1600 × 900 · 628 KB",
-    used: "2 articles",
-    tone: "from-[#144487] via-[#2477d8] to-[#9fcaff]",
-  },
-  {
-    id: "media-5",
-    name: "retrieval-practice.png",
-    meta: "1280 × 720 · 504 KB",
-    used: "Not used",
-    tone: "from-[#5b1c57] via-[#bd4bad] to-[#f5bae8]",
-  },
-  {
-    id: "media-6",
-    name: "study-routine.png",
-    meta: "1280 × 720 · 577 KB",
-    used: "Not used",
-    tone: "from-[#343c55] via-[#69758f] to-[#c9d0dd]",
-  },
-] as const;
-
-const CATEGORIES = [
-  "AI & Learning",
-  "Study Skills",
-  "Rewards",
-  "Community",
-] as const;
-
-const TABS: ReadonlyArray<{
-  readonly label: string;
-  readonly value: WorkspaceTab;
-}> = [
+const TABS: ReadonlyArray<{ label: string; value: WorkspaceTab }> = [
   { label: "Overview", value: "overview" },
-  { label: "All posts", value: "posts" },
+  { label: "Articles", value: "posts" },
   { label: "Editor", value: "editor" },
   { label: "Discussions", value: "discussions" },
   { label: "Media", value: "media" },
 ];
+const STATUS_LABELS: Record<PostStatus, string> = {
+  DRAFT: "Draft",
+  IN_REVIEW: "In review",
+  SCHEDULED: "Scheduled",
+  PUBLISHED: "Published",
+  ARCHIVED: "Archived",
+};
+const DISCUSSION_LABELS: Record<DiscussionStatus, string> = {
+  PENDING: "Pending",
+  APPROVED: "Approved",
+  FLAGGED: "Flagged",
+  HIDDEN: "Hidden",
+};
+const dateTime = (value: string | null) =>
+  value
+    ? new Intl.DateTimeFormat("en-NG", {
+        dateStyle: "medium",
+        timeStyle: "short",
+        hour12: true,
+        timeZone: "Africa/Lagos",
+      }).format(new Date(value))
+    : "Not published";
+const compactNumber = (value: number) =>
+  new Intl.NumberFormat("en-NG", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
 
-function BlogIcon({
-  name,
-  ...props
-}: { readonly name: BlogIconName } & SVGProps<SVGSVGElement>) {
-  const common = {
-    fill: "none",
-    stroke: "currentColor",
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    strokeWidth: 1.8,
-  };
-
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" {...props}>
-      {name === "plus" ? <path {...common} d="M12 5v14M5 12h14" /> : null}
-      {name === "search" ? (
-        <>
-          <circle {...common} cx="11" cy="11" r="6.5" />
-          <path {...common} d="m16 16 4 4" />
-        </>
-      ) : null}
-      {name === "eye" ? (
-        <>
-          <path
-            {...common}
-            d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"
-          />
-          <circle {...common} cx="12" cy="12" r="2.5" />
-        </>
-      ) : null}
-      {name === "edit" ? (
-        <>
-          <path
-            {...common}
-            d="m14.5 5.5 4 4M4 20l4.5-1 10-10a2.8 2.8 0 0 0-4-4l-10 10L4 20Z"
-          />
-        </>
-      ) : null}
-      {name === "comment" ? (
-        <path
-          {...common}
-          d="M5 18.5 3.5 21l4.2-1.2c1.3.5 2.7.7 4.3.7 5 0 9-3.7 9-8.5s-4-8.5-9-8.5S3 7.2 3 12c0 2.6 1.1 4.8 3 6.4"
-        />
-      ) : null}
-      {name === "upload" ? (
-        <>
-          <path
-            {...common}
-            d="M12 16V4m-4 4 4-4 4 4M4 15v4a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19v-4"
-          />
-        </>
-      ) : null}
-      {name === "more" ? (
-        <>
-          <circle cx="5" cy="12" fill="currentColor" r="1.3" />
-          <circle cx="12" cy="12" fill="currentColor" r="1.3" />
-          <circle cx="19" cy="12" fill="currentColor" r="1.3" />
-        </>
-      ) : null}
-      {name === "image" ? (
-        <>
-          <rect {...common} height="16" rx="2" width="18" x="3" y="4" />
-          <circle {...common} cx="8.5" cy="9" r="1.5" />
-          <path {...common} d="m4 17 4.5-4 3.2 3 2.4-2.2L20 19" />
-        </>
-      ) : null}
-      {name === "calendar" ? (
-        <>
-          <rect {...common} height="16" rx="2" width="18" x="3" y="5" />
-          <path {...common} d="M8 3v4M16 3v4M3 10h18" />
-        </>
-      ) : null}
-      {name === "chevron" ? <path {...common} d="m9 6 6 6-6 6" /> : null}
-      {name === "link" ? (
-        <>
-          <path
-            {...common}
-            d="m9.5 14.5 5-5M7.5 17.5l-1 1a3.5 3.5 0 0 1-5-5l3-3a3.5 3.5 0 0 1 5 0M16.5 6.5l1-1a3.5 3.5 0 0 1 5 5l-3 3a3.5 3.5 0 0 1-5 0"
-          />
-        </>
-      ) : null}
-      {name === "heart" ? (
-        <path
-          {...common}
-          d="M20.8 5.7c-2-2.1-5.3-1.8-7.1.4L12 8l-1.7-1.9C8.5 3.9 5.2 3.6 3.2 5.7c-2 2.2-1.8 5.6.3 7.7L12 21l8.5-7.6c2.1-2.1 2.3-5.5.3-7.7Z"
-        />
-      ) : null}
-      {name === "clock" ? (
-        <>
-          <circle {...common} cx="12" cy="12" r="9" />
-          <path {...common} d="M12 7v5l3.5 2" />
-        </>
-      ) : null}
-      {name === "trash" ? (
-        <>
-          <path
-            {...common}
-            d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"
-          />
-        </>
-      ) : null}
-      {name === "check" ? <path {...common} d="m5 12 4 4L19 6" /> : null}
-      {name === "flag" ? (
-        <path {...common} d="M5 21V4m0 1h10l-1 4 3 4H5" />
-      ) : null}
-      {name === "x" ? <path {...common} d="m6 6 12 12M18 6 6 18" /> : null}
-    </svg>
+const escapeHtml = (value: string) =>
+  value.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[character] ?? character,
   );
-}
 
-function StatusBadge({
+const contentToEditorHtml = (blocks: string[]) =>
+  blocks
+    .map((block) => {
+      const value = block.trim();
+      if (!value) return "";
+      return /<\/?[a-z][\s\S]*>/i.test(value)
+        ? value
+        : `<p>${escapeHtml(value).replace(/\n/g, "<br />")}</p>`;
+    })
+    .filter(Boolean)
+    .join("");
+
+function StatusPill({
   status,
 }: {
-  readonly status: DiscussionStatus | PostStatus;
+  readonly status: PostStatus | DiscussionStatus;
 }) {
-  const styles: Record<DiscussionStatus | PostStatus, string> = {
-    Approved: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-    Published: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-    Draft: "bg-slate-500/10 text-slate-600 dark:text-slate-300",
-    Scheduled: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-    "In review": "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-    Pending: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-    Flagged: "bg-rose-500/10 text-rose-700 dark:text-rose-400",
-    Hidden: "bg-slate-500/10 text-slate-600 dark:text-slate-300",
-  };
+  const label =
+    status in STATUS_LABELS
+      ? STATUS_LABELS[status as PostStatus]
+      : DISCUSSION_LABELS[status as DiscussionStatus];
   return (
     <span
       className={cn(
-        "inline-flex rounded-full px-2.5 py-1 text-[.64rem] font-bold",
-        styles[status],
+        "inline-flex w-fit rounded-full px-2.5 py-1 text-[.6rem] font-bold",
+        status === "PUBLISHED" || status === "APPROVED"
+          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+          : status === "FLAGGED"
+            ? "bg-rose-500/10 text-rose-700 dark:text-rose-400"
+            : status === "SCHEDULED"
+              ? "bg-blue-500/10 text-blue-700 dark:text-blue-400"
+              : "bg-amber-500/10 text-amber-700 dark:text-amber-400",
       )}
     >
-      {status}
+      {label}
     </span>
   );
 }
 
-function MetricCard({
-  description,
+function Cover({
+  post,
+  className,
+}: {
+  readonly post: BlogPost;
+  readonly className?: string;
+}) {
+  return post.coverImageUrl ? (
+    <span
+      className={cn("relative block overflow-hidden bg-violet-100", className)}
+    >
+      <Image
+        alt={post.coverImageAlt ?? ""}
+        className="object-cover"
+        fill
+        loading="lazy"
+        sizes="320px"
+        src={post.coverImageUrl}
+      />
+    </span>
+  ) : (
+    <span
+      className={cn(
+        "from-primary/30 via-primary/15 to-surface-subtle grid place-items-center bg-gradient-to-br",
+        className,
+      )}
+    >
+      <AdminIcon className="text-primary size-7" name="blog" />
+    </span>
+  );
+}
+
+function Metric({
   icon,
   label,
   value,
+  detail,
 }: {
-  readonly description: string;
-  readonly icon: "analytics" | "blog" | "comment" | "edit";
+  readonly icon: "analytics" | "blog" | "content";
   readonly label: string;
   readonly value: string;
+  readonly detail: string;
 }) {
   return (
-    <article className="surface-card rounded-2xl p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-muted-foreground text-[.7rem] font-semibold">
-            {label}
-          </p>
-          <p className="text-foreground mt-2 text-2xl font-bold tracking-[-0.04em]">
-            {value}
-          </p>
-        </div>
+    <article className="surface-card rounded-2xl p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-3">
         <span className="bg-primary/10 text-primary grid size-10 place-items-center rounded-xl">
-          {icon === "comment" ? (
-            <BlogIcon className="size-[18px]" name="comment" />
-          ) : icon === "edit" ? (
-            <BlogIcon className="size-[18px]" name="edit" />
-          ) : (
-            <AdminIcon className="size-[18px]" name={icon} />
-          )}
+          <AdminIcon className="size-[18px]" name={icon} />
         </span>
+        <p className="text-foreground text-2xl font-bold tracking-[-0.04em]">
+          {value}
+        </p>
       </div>
-      <p className="text-muted-foreground mt-4 text-[.66rem]">{description}</p>
+      <p className="text-foreground mt-4 text-xs font-bold">{label}</p>
+      <p className="text-muted-foreground mt-1 text-[.64rem]">{detail}</p>
     </article>
   );
 }
 
 function OverviewPanel({
+  data,
   openEditor,
   openTab,
 }: {
+  readonly data: BlogResponse;
   readonly openEditor: (post?: BlogPost) => void;
   readonly openTab: (tab: WorkspaceTab) => void;
 }) {
-  const featured = POSTS.find((post) => post.featured) ?? POSTS[0];
   return (
     <div className="space-y-5">
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          description="19 published · 6 drafts · 3 scheduled"
+        <Metric
+          detail={`${data.metrics.published} published · ${data.metrics.drafts} drafts · ${data.metrics.scheduled} scheduled`}
           icon="blog"
           label="Total articles"
-          value="28"
+          value={data.metrics.totalArticles.toLocaleString()}
         />
-        <MetricCard
-          description="+18.2% compared with last month"
+        <Metric
+          detail="Across all persisted articles"
           icon="analytics"
-          label="Views this month"
-          value="48.6k"
+          label="Total article views"
+          value={compactNumber(data.metrics.totalViews)}
         />
-        <MetricCard
-          description="12 waiting for moderation"
-          icon="comment"
+        <Metric
+          detail={`${data.metrics.pendingDiscussions} pending · ${data.metrics.flaggedDiscussions} flagged`}
+          icon="content"
           label="Discussions"
-          value="184"
+          value={data.metrics.discussions.toLocaleString()}
         />
-        <MetricCard
-          description="3 drafts need editorial review"
-          icon="edit"
+        <Metric
+          detail="Drafts, reviews, and scheduled posts"
+          icon="content"
           label="Editorial queue"
-          value="6"
+          value={data.metrics.editorialQueue.toLocaleString()}
         />
       </section>
-
       <section className="grid gap-5 xl:grid-cols-[1.35fr_.65fr]">
         <article className="surface-card overflow-hidden rounded-[1.5rem]">
-          <div className="border-border flex flex-col gap-3 border-b p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="border-border flex items-center justify-between gap-4 border-b p-5 sm:p-6">
             <div>
               <p className="text-foreground text-base font-bold">
                 Featured story
               </p>
               <p className="text-muted-foreground mt-1 text-xs">
-                Primary story currently highlighted on the public blog
+                The story highlighted on the public blog
               </p>
             </div>
-            <button
-              className="text-primary inline-flex items-center gap-1.5 self-start text-xs font-bold"
-              onClick={() => openEditor(featured)}
-              type="button"
-            >
-              Edit feature
-              <BlogIcon className="size-4" name="edit" />
-            </button>
+            {data.featured ? (
+              <button
+                className="text-primary inline-flex items-center gap-1.5 text-xs font-bold"
+                onClick={() => openEditor(data.featured!)}
+                type="button"
+              >
+                Edit <Pencil className="size-3.5" />
+              </button>
+            ) : null}
           </div>
-          <div className="grid lg:grid-cols-[.82fr_1.18fr]">
-            <div
-              className={cn(
-                "relative min-h-64 overflow-hidden bg-gradient-to-br p-6",
-                featured.tone,
-              )}
-            >
-              <div className="absolute -right-10 -bottom-16 size-56 rounded-full border-[34px] border-white/10" />
-              <div className="absolute top-7 right-7 grid size-16 place-items-center rounded-2xl bg-white/10 text-white backdrop-blur-sm">
-                <AdminIcon className="size-8" name="blog" />
-              </div>
-              <p className="relative mt-36 text-[.68rem] font-bold tracking-[.13em] text-white/70 uppercase">
-                {featured.category}
-              </p>
-            </div>
-            <div className="flex flex-col justify-center p-6 sm:p-7">
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge status={featured.status} />
-                <span className="bg-primary/10 text-primary rounded-full px-2.5 py-1 text-[.64rem] font-bold">
-                  Featured
-                </span>
-              </div>
-              <h2 className="text-foreground mt-4 text-xl font-bold tracking-[-0.035em]">
-                {featured.title}
-              </h2>
-              <p className="text-muted-foreground mt-3 text-[.78rem] leading-5">
-                {featured.excerpt}
-              </p>
-              <div className="text-muted-foreground mt-5 flex flex-wrap gap-x-4 gap-y-2 text-[.68rem]">
-                <span>{featured.author}</span>
-                <span>{featured.readTime} read</span>
-                <span>{featured.views.toLocaleString()} views</span>
+          {data.featured ? (
+            <div className="grid lg:grid-cols-[.82fr_1.18fr]">
+              <Cover className="min-h-64" post={data.featured} />
+              <div className="flex flex-col justify-center p-6 sm:p-7">
+                <div className="flex flex-wrap gap-2">
+                  <StatusPill status={data.featured.status} />
+                  <span className="bg-primary/10 text-primary rounded-full px-2.5 py-1 text-[.6rem] font-bold">
+                    Featured
+                  </span>
+                </div>
+                <h2 className="text-foreground mt-4 text-xl font-bold tracking-[-0.035em]">
+                  {data.featured.title}
+                </h2>
+                <p className="text-muted-foreground mt-3 text-[.76rem] leading-5">
+                  {data.featured.excerpt}
+                </p>
+                <p className="text-muted-foreground mt-5 text-[.66rem]">
+                  {data.featured.authorName} · {data.featured.readTimeMinutes}{" "}
+                  min read · {data.featured.viewCount.toLocaleString()} views
+                </p>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="grid min-h-64 place-items-center p-8 text-center">
+              <div>
+                <ImageIcon className="text-muted-foreground mx-auto size-8" />
+                <p className="text-foreground mt-3 text-sm font-bold">
+                  No featured story
+                </p>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  Mark an article as featured from the editor.
+                </p>
+              </div>
+            </div>
+          )}
         </article>
-
         <article className="surface-card rounded-[1.5rem] p-5 sm:p-6">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -531,55 +374,51 @@ function OverviewPanel({
               </p>
             </div>
             <span className="grid size-8 place-items-center rounded-full bg-amber-500/10 text-xs font-bold text-amber-700 dark:text-amber-400">
-              4
+              {data.metrics.editorialQueue}
             </span>
           </div>
           <div className="mt-5 divide-y">
-            {POSTS.filter((post) => post.status !== "Published")
-              .slice(0, 4)
-              .map((post) => (
-                <button
-                  className="group flex w-full items-center gap-3 py-4 text-left first:pt-0 last:pb-0"
-                  key={post.id}
-                  onClick={() => openEditor(post)}
-                  type="button"
-                >
-                  <span
-                    className={cn(
-                      "size-10 shrink-0 rounded-xl bg-gradient-to-br",
-                      post.tone,
-                    )}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="text-foreground block truncate text-[.72rem] font-bold">
-                      {post.title}
-                    </span>
-                    <span className="text-muted-foreground mt-1 block text-[.64rem]">
-                      {post.updatedAt}
-                    </span>
+            {data.queue.map((post) => (
+              <button
+                className="flex w-full items-center gap-3 py-3.5 text-left first:pt-0"
+                key={post.id}
+                onClick={() => openEditor(post)}
+                type="button"
+              >
+                <Cover className="size-10 shrink-0 rounded-xl" post={post} />
+                <span className="min-w-0 flex-1">
+                  <span className="text-foreground block truncate text-[.7rem] font-bold">
+                    {post.title}
                   </span>
-                  <StatusBadge status={post.status} />
-                </button>
-              ))}
+                  <span className="text-muted-foreground mt-1 block text-[.62rem]">
+                    Updated {dateTime(post.updatedAt)}
+                  </span>
+                </span>
+                <StatusPill status={post.status} />
+              </button>
+            ))}
+            {!data.queue.length ? (
+              <p className="text-muted-foreground py-10 text-center text-xs">
+                The publishing queue is clear.
+              </p>
+            ) : null}
           </div>
           <button
-            className="text-primary mt-6 inline-flex items-center gap-1.5 text-xs font-bold"
+            className="text-primary mt-5 inline-flex items-center gap-1.5 text-xs font-bold"
             onClick={() => openTab("posts")}
             type="button"
           >
-            Open editorial queue
-            <BlogIcon className="size-4" name="chevron" />
+            Open article library <ArrowRight className="size-3.5" />
           </button>
         </article>
       </section>
-
       <section className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]">
         <article className="surface-card rounded-[1.5rem] p-5 sm:p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-foreground text-base font-bold">Top stories</p>
               <p className="text-muted-foreground mt-1 text-xs">
-                Best-performing published articles this month
+                Published articles ranked by recorded views
               </p>
             </div>
             <button
@@ -591,40 +430,35 @@ function OverviewPanel({
             </button>
           </div>
           <div className="mt-5 space-y-4">
-            {POSTS.filter((post) => post.status === "Published").map(
-              (post, index) => (
-                <div className="flex items-center gap-3" key={post.id}>
-                  <span className="text-muted-foreground w-5 text-center text-xs font-bold">
-                    {index + 1}
-                  </span>
-                  <span
-                    className={cn(
-                      "size-11 shrink-0 rounded-xl bg-gradient-to-br",
-                      post.tone,
-                    )}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-foreground truncate text-[.72rem] font-bold">
-                      {post.title}
-                    </p>
-                    <p className="text-muted-foreground mt-1 text-[.64rem]">
-                      {post.category} · {post.readTime}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-foreground text-xs font-bold">
-                      {post.views.toLocaleString()}
-                    </p>
-                    <p className="text-muted-foreground mt-1 text-[.62rem]">
-                      views
-                    </p>
-                  </div>
+            {data.topStories.map((post, index) => (
+              <div className="flex items-center gap-3" key={post.id}>
+                <span className="text-muted-foreground w-5 text-center text-xs font-bold">
+                  {index + 1}
+                </span>
+                <Cover className="size-11 shrink-0 rounded-xl" post={post} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-foreground truncate text-[.72rem] font-bold">
+                    {post.title}
+                  </p>
+                  <p className="text-muted-foreground mt-1 text-[.62rem]">
+                    {post.category} · {post.readTimeMinutes} min
+                  </p>
                 </div>
-              ),
-            )}
+                <div className="text-right">
+                  <p className="text-foreground text-xs font-bold">
+                    {post.viewCount.toLocaleString()}
+                  </p>
+                  <p className="text-muted-foreground text-[.6rem]">views</p>
+                </div>
+              </div>
+            ))}
+            {!data.topStories.length ? (
+              <p className="text-muted-foreground py-10 text-center text-xs">
+                No published stories yet.
+              </p>
+            ) : null}
           </div>
         </article>
-
         <article className="surface-card rounded-[1.5rem] p-5 sm:p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -632,18 +466,18 @@ function OverviewPanel({
                 Discussion health
               </p>
               <p className="text-muted-foreground mt-1 text-xs">
-                Community activity requiring moderation
+                Real moderation status across all comments
               </p>
             </div>
             <span className="bg-primary/10 text-primary grid size-9 place-items-center rounded-xl">
-              <BlogIcon className="size-[18px]" name="comment" />
+              <MessageCircle className="size-[18px]" />
             </span>
           </div>
           <div className="mt-6 grid grid-cols-3 gap-3">
             {[
-              ["184", "Total"],
-              ["12", "Pending"],
-              ["3", "Flagged"],
+              [data.metrics.discussions, "Total"],
+              [data.metrics.pendingDiscussions, "Pending"],
+              [data.metrics.flaggedDiscussions, "Flagged"],
             ].map(([value, label]) => (
               <div className="bg-surface-subtle rounded-2xl p-3" key={label}>
                 <p className="text-foreground text-lg font-bold">{value}</p>
@@ -653,22 +487,12 @@ function OverviewPanel({
               </div>
             ))}
           </div>
-          <div className="bg-surface-subtle mt-4 rounded-2xl p-4">
-            <div className="flex items-center justify-between text-[.68rem]">
-              <span className="text-muted-foreground">Positive sentiment</span>
-              <span className="text-foreground font-bold">91%</span>
-            </div>
-            <div className="bg-border mt-2 h-2 overflow-hidden rounded-full">
-              <div className="h-full w-[91%] rounded-full bg-emerald-500" />
-            </div>
-          </div>
           <button
             className="text-primary mt-5 inline-flex items-center gap-1.5 text-xs font-bold"
             onClick={() => openTab("discussions")}
             type="button"
           >
-            Moderate discussions
-            <BlogIcon className="size-4" name="chevron" />
+            Moderate discussions <ArrowRight className="size-3.5" />
           </button>
         </article>
       </section>
@@ -677,164 +501,125 @@ function OverviewPanel({
 }
 
 function PostsPanel({
+  posts,
   editPost,
 }: {
+  readonly posts: BlogPost[];
   readonly editPost: (post: BlogPost) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"All" | PostStatus>("All");
-  const visiblePosts = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return POSTS.filter(
+  const [filter, setFilter] = useState<"ALL" | PostStatus>("ALL");
+  const [page, setPage] = useState(1);
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return posts.filter(
       (post) =>
-        (filter === "All" || post.status === filter) &&
-        (!normalized ||
-          post.title.toLowerCase().includes(normalized) ||
-          post.author.toLowerCase().includes(normalized) ||
-          post.category.toLowerCase().includes(normalized)),
+        (filter === "ALL" || post.status === filter) &&
+        (!term ||
+          `${post.title} ${post.authorName} ${post.category}`
+            .toLowerCase()
+            .includes(term)),
     );
-  }, [filter, query]);
-
+  }, [filter, posts, query]);
+  const pageSize = 6;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const visible = filtered.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
   return (
     <section className="surface-card overflow-hidden rounded-[1.5rem]">
       <div className="border-border flex flex-col gap-4 border-b p-5 sm:p-6 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <p className="text-foreground text-base font-bold">Article library</p>
           <p className="text-muted-foreground mt-1 text-xs">
-            Review, edit, schedule, and manage every public story
+            Search and manage every persisted article
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <label className="border-border bg-background flex h-10 min-w-0 items-center gap-2 rounded-xl border px-3 sm:w-64">
-            <BlogIcon className="text-muted-foreground size-4" name="search" />
-            <span className="sr-only">Search posts</span>
+          <label className="border-border bg-background flex h-10 items-center gap-2 rounded-xl border px-3 sm:w-64">
+            <Search className="text-muted-foreground size-4" />
             <input
-              className="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-xs outline-none"
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search title, author, category"
+              className="min-w-0 flex-1 bg-transparent text-xs outline-none"
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPage(1);
+              }}
+              placeholder="Search articles"
               type="search"
               value={query}
             />
           </label>
-          <select
-            className="border-border bg-background h-10 rounded-xl border px-3 text-xs font-semibold outline-none"
-            onChange={(event) =>
-              setFilter(event.target.value as "All" | PostStatus)
-            }
+          <Select
+            className="border-border bg-background h-10 rounded-xl border px-3 text-xs font-semibold"
+            onChange={(event) => {
+              setFilter(event.target.value as "ALL" | PostStatus);
+              setPage(1);
+            }}
             value={filter}
           >
-            {["All", "Published", "Draft", "Scheduled", "In review"].map(
-              (option) => (
-                <option key={option}>{option}</option>
-              ),
-            )}
-          </select>
+            <option value="ALL">All statuses</option>
+            {Object.entries(STATUS_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </Select>
         </div>
       </div>
-
-      <div className="border-border text-muted-foreground hidden grid-cols-[minmax(280px,1.6fr)_120px_145px_120px_76px] gap-4 border-b px-6 py-3 text-[.62rem] font-bold tracking-[.1em] uppercase lg:grid">
-        <span>Article</span>
-        <span>Status</span>
-        <span>Performance</span>
-        <span>Updated</span>
-        <span className="text-right">Actions</span>
-      </div>
       <div className="divide-y">
-        {visiblePosts.map((post) => (
+        {visible.map((post) => (
           <article
-            className="grid gap-4 p-5 lg:grid-cols-[minmax(280px,1.6fr)_120px_145px_120px_76px] lg:items-center lg:px-6"
+            className="grid gap-4 p-5 lg:grid-cols-[minmax(260px,1.5fr)_120px_145px_150px_44px] lg:items-center lg:px-6"
             key={post.id}
           >
             <div className="flex min-w-0 items-center gap-3">
-              <span
-                className={cn(
-                  "size-14 shrink-0 rounded-xl bg-gradient-to-br",
-                  post.tone,
-                )}
-              />
+              <Cover className="size-14 shrink-0 rounded-xl" post={post} />
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-foreground truncate text-xs font-bold">
-                    {post.title}
-                  </p>
-                  {post.featured ? (
-                    <span className="bg-primary/10 text-primary shrink-0 rounded-full px-2 py-0.5 text-[.58rem] font-bold">
-                      Featured
-                    </span>
-                  ) : null}
-                </div>
+                <p className="text-foreground truncate text-xs font-bold">
+                  {post.title}
+                </p>
                 <p className="text-muted-foreground mt-1 truncate text-[.64rem]">
-                  {post.category} · {post.author}
+                  {post.category} · {post.authorName}
                 </p>
               </div>
             </div>
-            <div>
-              <StatusBadge status={post.status} />
-            </div>
-            <div className="text-muted-foreground flex items-center gap-3 text-[.64rem]">
-              <span className="flex items-center gap-1">
-                <BlogIcon className="size-3.5" name="eye" />
-                {post.views.toLocaleString()}
-              </span>
-              <span className="flex items-center gap-1">
-                <BlogIcon className="size-3.5" name="comment" />
-                {post.comments}
-              </span>
-            </div>
-            <div>
-              <p className="text-foreground text-[.68rem] font-semibold">
-                {post.updatedAt}
-              </p>
-              <p className="text-muted-foreground mt-1 text-[.62rem]">
-                {post.readTime} read
-              </p>
-            </div>
-            <div className="flex justify-end gap-1">
-              <button
-                aria-label={`Edit ${post.title}`}
-                className="hover:bg-primary/10 hover:text-primary grid size-8 place-items-center rounded-lg transition"
-                onClick={() => editPost(post)}
-                type="button"
-              >
-                <BlogIcon className="size-4" name="edit" />
-              </button>
-              <button
-                aria-label={`More options for ${post.title}`}
-                className="hover:bg-surface-subtle text-muted-foreground grid size-8 place-items-center rounded-lg"
-                type="button"
-              >
-                <BlogIcon className="size-4" name="more" />
-              </button>
-            </div>
+            <StatusPill status={post.status} />
+            <p className="text-muted-foreground text-[.66rem]">
+              <span className="text-foreground font-bold">
+                {post.viewCount.toLocaleString()}
+              </span>{" "}
+              views · {post.commentCount} comments
+            </p>
+            <p className="text-muted-foreground text-[.66rem]">
+              {dateTime(post.updatedAt)}
+            </p>
+            <button
+              aria-label={`Edit ${post.title}`}
+              className="text-muted-foreground hover:bg-primary/10 hover:text-primary grid size-9 place-items-center rounded-lg"
+              onClick={() => editPost(post)}
+              type="button"
+            >
+              <Pencil className="size-4" />
+            </button>
           </article>
         ))}
-        {visiblePosts.length === 0 ? (
-          <div className="p-12 text-center">
-            <p className="text-foreground text-sm font-bold">
-              No articles found
-            </p>
-            <p className="text-muted-foreground mt-2 text-xs">
-              Try a different search term or publishing status.
-            </p>
-          </div>
+        {!visible.length ? (
+          <p className="text-muted-foreground py-14 text-center text-xs">
+            No articles match these filters.
+          </p>
         ) : null}
       </div>
-      <div className="border-border text-muted-foreground flex items-center justify-between border-t px-5 py-4 text-[.68rem] sm:px-6">
-        <span>Showing {visiblePosts.length} of 28 articles</span>
-        <div className="flex gap-2">
-          <button
-            className="border-border rounded-lg border px-3 py-1.5"
-            type="button"
-          >
-            Previous
-          </button>
-          <button
-            className="border-border rounded-lg border px-3 py-1.5"
-            type="button"
-          >
-            Next
-          </button>
-        </div>
+      <div className="px-5 pb-4 sm:px-6">
+        <Pagination
+          currentPage={currentPage}
+          itemLabel="articles"
+          onPageChange={setPage}
+          pageSize={pageSize}
+          totalItems={filtered.length}
+          totalPages={totalPages}
+        />
       </div>
     </section>
   );
@@ -842,253 +627,226 @@ function PostsPanel({
 
 function EditorPanel({
   editingPost,
-  notify,
+  onSaved,
 }: {
   readonly editingPost: BlogPost | null;
-  readonly notify: (message: string) => void;
+  readonly onSaved: (message: string) => void;
 }) {
-  const [title, setTitle] = useState(
-    editingPost?.title ??
-      "How small, consistent study sessions build stronger results",
-  );
-  const [excerpt, setExcerpt] = useState(
-    editingPost?.excerpt ??
-      "A practical guide to building a study rhythm learners can sustain, even on busy weeks.",
+  const queryClient = useQueryClient();
+  const [title, setTitle] = useState(editingPost?.title ?? "");
+  const [slug, setSlug] = useState(editingPost?.slug ?? "");
+  const [excerpt, setExcerpt] = useState(editingPost?.excerpt ?? "");
+  const [content, setContent] = useState(() =>
+    contentToEditorHtml(editingPost?.content ?? []),
   );
   const [category, setCategory] = useState(
     editingPost?.category ?? "Study Skills",
   );
-  const [author, setAuthor] = useState(
-    editingPost?.author ?? "Preppal Learning Team",
+  const [authorName, setAuthorName] = useState(
+    editingPost?.authorName ?? "Preppal Learning Team",
   );
-  const [slug, setSlug] = useState(
-    editingPost?.slug ?? "consistent-study-sessions",
+  const [tags, setTags] = useState(editingPost?.tags.join(", ") ?? "");
+  const [coverImageUrl, setCoverImageUrl] = useState(
+    editingPost?.coverImageUrl ?? "",
   );
-  const [tags, setTags] = useState(
-    editingPost
-      ? "Study habits, Consistency, Exam prep"
-      : "Study habits, Focus",
+  const [coverImageAlt, setCoverImageAlt] = useState(
+    editingPost?.coverImageAlt ?? "",
+  );
+  const [readTimeMinutes, setReadTimeMinutes] = useState(
+    editingPost?.readTimeMinutes ?? 5,
   );
   const [featured, setFeatured] = useState(editingPost?.featured ?? false);
-  const [body, setBody] = useState(
-    "Long study sessions can feel productive, but they are difficult to repeat consistently. A shorter routine that learners return to every day often creates stronger recall and less pressure.\n\nStart by choosing one clear learning goal for each session. Complete a focused quiz, review the explanation behind every missed answer, and write down the one idea you want to remember tomorrow.",
+  const [status, setStatus] = useState<PostStatus>(
+    editingPost?.status ?? "DRAFT",
   );
-
+  const [scheduledAt, setScheduledAt] = useState(
+    editingPost?.scheduledAt?.slice(0, 16) ?? "",
+  );
+  const save = useMutation({
+    mutationFn: ({ nextStatus }: { nextStatus: PostStatus }) => {
+      const input: SavePostInput = {
+        title: title.trim(),
+        slug: slug.trim(),
+        excerpt: excerpt.trim(),
+        content: content.trim() ? [content.trim()] : [],
+        category: category.trim(),
+        authorName: authorName.trim(),
+        coverImageUrl: coverImageUrl.trim() || undefined,
+        coverImageAlt: coverImageAlt.trim() || undefined,
+        tags: tags
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        readTimeMinutes,
+        status: nextStatus,
+        featured,
+        scheduledAt:
+          nextStatus === "SCHEDULED" && scheduledAt
+            ? new Date(scheduledAt).toISOString()
+            : undefined,
+      };
+      return apiClient(
+        `/api/v1/admin/blog/posts${editingPost ? `/${editingPost.id}` : ""}`,
+        { method: editingPost ? "PATCH" : "POST", body: JSON.stringify(input) },
+      );
+    },
+    onSuccess: async (_, variables) => {
+      setStatus(variables.nextStatus);
+      await queryClient.invalidateQueries({ queryKey: ["admin", "blog"] });
+      onSaved(
+        variables.nextStatus === "PUBLISHED"
+          ? "Article has been published."
+          : "Article saved successfully.",
+      );
+    },
+  });
+  const disabled =
+    !title.trim() ||
+    !slug.trim() ||
+    excerpt.trim().length < 10 ||
+    !content.trim() ||
+    !category.trim() ||
+    !authorName.trim() ||
+    save.isPending;
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-      <section className="surface-card overflow-hidden rounded-[1.5rem]">
-        <div className="border-border flex flex-col gap-3 border-b p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+    <form
+      className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_360px]"
+      onSubmit={(event) => {
+        event.preventDefault();
+        save.mutate({ nextStatus: status });
+      }}
+    >
+      <section className="surface-card rounded-[1.5rem] p-5 sm:p-6">
+        <div className="border-border mb-5 flex items-center justify-between gap-4 border-b pb-5">
           <div>
             <p className="text-foreground text-base font-bold">
               {editingPost ? "Edit article" : "Create article"}
             </p>
             <p className="text-muted-foreground mt-1 text-xs">
-              Draft the story exactly as it will appear to learners
+              Content is saved directly to the blog database.
             </p>
           </div>
-          <span className="text-muted-foreground text-[.66rem]">
-            Autosaved just now
-          </span>
+          <StatusPill status={status} />
         </div>
-
-        <div className="space-y-5 p-5 sm:p-6">
+        <div className="space-y-4">
           <label className="block">
-            <span className="text-muted-foreground mb-2 block text-[.68rem] font-bold">
+            <span className="text-muted-foreground mb-1.5 block text-[.66rem] font-bold">
               Article title
             </span>
-            <textarea
-              className="placeholder:text-muted-foreground min-h-20 w-full resize-none bg-transparent text-2xl font-bold tracking-[-0.04em] outline-none sm:text-3xl"
-              maxLength={120}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Give the story a clear, useful title"
+            <input
+              className="border-border bg-background focus:border-primary h-11 w-full rounded-xl border px-3 text-sm outline-none"
+              onChange={(event) => {
+                setTitle(event.target.value);
+                if (!editingPost)
+                  setSlug(
+                    event.target.value
+                      .toLowerCase()
+                      .trim()
+                      .replace(/[^a-z0-9]+/g, "-")
+                      .replace(/(^-|-$)/g, ""),
+                  );
+              }}
+              required
               value={title}
             />
-            <span className="text-muted-foreground mt-1 block text-right text-[.62rem]">
-              {title.length}/120
-            </span>
           </label>
-
           <label className="block">
-            <span className="text-muted-foreground mb-2 block text-[.68rem] font-bold">
+            <span className="text-muted-foreground mb-1.5 block text-[.66rem] font-bold">
               Description
             </span>
             <textarea
-              className="border-border bg-background focus:border-primary min-h-24 w-full resize-y rounded-2xl border px-4 py-3 text-[.78rem] leading-5 outline-none"
-              maxLength={240}
+              className="border-border bg-background focus:border-primary min-h-24 w-full rounded-xl border p-3 text-xs leading-5 outline-none"
+              maxLength={500}
               onChange={(event) => setExcerpt(event.target.value)}
-              placeholder="A concise introduction used on the blog card and search results"
+              required
               value={excerpt}
             />
-            <span className="text-muted-foreground mt-1 block text-right text-[.62rem]">
-              {excerpt.length}/240
-            </span>
           </label>
-
-          <div>
-            <div className="text-muted-foreground mb-2 flex items-center justify-between gap-3">
-              <span className="text-[.68rem] font-bold">Article content</span>
-              <span className="text-[.62rem]">About 4 min read</span>
-            </div>
-            <div className="border-border overflow-hidden rounded-2xl border">
-              <div className="border-border bg-surface-subtle flex flex-wrap items-center gap-1 border-b p-2">
-                {["H2", "H3", "B", "I", "“”"].map((control) => (
-                  <button
-                    className="hover:bg-surface grid h-8 min-w-8 place-items-center rounded-lg px-2 text-[.68rem] font-bold"
-                    key={control}
-                    type="button"
-                  >
-                    {control}
-                  </button>
-                ))}
-                <span className="bg-border mx-1 h-5 w-px" />
-                <button
-                  className="hover:bg-surface flex h-8 items-center gap-1.5 rounded-lg px-2 text-[.68rem] font-bold"
-                  type="button"
-                >
-                  <BlogIcon className="size-3.5" name="link" />
-                  Link
-                </button>
-                <button
-                  className="hover:bg-surface flex h-8 items-center gap-1.5 rounded-lg px-2 text-[.68rem] font-bold"
-                  type="button"
-                >
-                  <BlogIcon className="size-3.5" name="image" />
-                  Inline image
-                </button>
-              </div>
-              <textarea
-                className="bg-surface min-h-72 w-full resize-y px-5 py-5 text-[.8rem] leading-7 outline-none"
-                onChange={(event) => setBody(event.target.value)}
-                placeholder="Start writing your article..."
-                value={body}
-              />
-              <div className="border-border bg-surface-subtle/50 m-4 mt-0 overflow-hidden rounded-2xl border">
-                <div className="from-primary/20 via-primary/10 to-surface-subtle grid min-h-36 place-items-center bg-gradient-to-br">
-                  <div className="text-primary text-center">
-                    <BlogIcon className="mx-auto size-7" name="image" />
-                    <p className="mt-2 text-[.68rem] font-bold">
-                      Inline article image
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
-                  <input
-                    aria-label="Image caption"
-                    className="min-w-0 flex-1 bg-transparent text-[.68rem] outline-none"
-                    defaultValue="A focused learner completing a short daily practice session."
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      className="text-primary text-[.66rem] font-bold"
-                      type="button"
-                    >
-                      Replace
-                    </button>
-                    <button
-                      className="text-danger text-[.66rem] font-bold"
-                      type="button"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <RichContentEditor
+            label="Article content"
+            minHeight="min-h-[24rem]"
+            onChange={setContent}
+            placeholder="Write the article using headings, paragraphs, lists, quotes, tables, formulas, images, and diagrams."
+            value={content}
+          />
         </div>
       </section>
-
       <aside className="space-y-5">
         <section className="surface-card rounded-2xl p-5">
-          <div className="flex items-center justify-between">
-            <p className="text-foreground text-sm font-bold">Publish</p>
-            <StatusBadge status={editingPost?.status ?? "Draft"} />
-          </div>
-          <div className="mt-5 space-y-3">
-            <button
-              className="bg-primary text-primary-foreground hover:bg-primary-strong h-10 w-full rounded-xl text-xs font-bold transition"
-              onClick={() => notify("Article published to the blog preview.")}
-              type="button"
-            >
-              {editingPost?.status === "Published"
-                ? "Update article"
-                : "Publish article"}
-            </button>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                className="border-border hover:bg-surface-subtle h-10 rounded-xl border text-[.68rem] font-bold"
-                onClick={() => notify("Draft saved.")}
-                type="button"
+          <p className="text-foreground text-sm font-bold">Publishing</p>
+          <div className="mt-4 space-y-3">
+            <Field label="Status">
+              <Select
+                className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs"
+                onChange={(event) =>
+                  setStatus(event.target.value as PostStatus)
+                }
+                value={status}
               >
-                Save draft
-              </button>
-              <button
-                className="border-border hover:bg-surface-subtle flex h-10 items-center justify-center gap-1.5 rounded-xl border text-[.68rem] font-bold"
-                onClick={() => notify("Article preview prepared.")}
-                type="button"
-              >
-                <BlogIcon className="size-3.5" name="eye" />
-                Preview
-              </button>
-            </div>
-            <button
-              className="text-primary flex w-full items-center justify-center gap-1.5 py-1 text-[.68rem] font-bold"
-              type="button"
-            >
-              <BlogIcon className="size-3.5" name="calendar" />
-              Schedule for later
-            </button>
-          </div>
-        </section>
-
-        <section className="surface-card rounded-2xl p-5">
-          <p className="text-foreground text-sm font-bold">Story details</p>
-          <div className="mt-4 space-y-4">
-            <label className="block">
-              <span className="text-muted-foreground mb-1.5 block text-[.64rem] font-bold">
-                Category
-              </span>
-              <select
-                className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs outline-none"
-                onChange={(event) => setCategory(event.target.value)}
-                value={category}
-              >
-                {CATEGORIES.map((item) => (
-                  <option key={item}>{item}</option>
+                {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
                 ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="text-muted-foreground mb-1.5 block text-[.64rem] font-bold">
-                Author
-              </span>
+              </Select>
+            </Field>
+            {status === "SCHEDULED" ? (
+              <Field label="Publish date and time">
+                <input
+                  className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs"
+                  onChange={(event) => setScheduledAt(event.target.value)}
+                  required
+                  type="datetime-local"
+                  value={scheduledAt}
+                />
+              </Field>
+            ) : null}
+            <Field label="Category">
               <input
-                className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs outline-none"
-                onChange={(event) => setAuthor(event.target.value)}
-                value={author}
+                className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs"
+                onChange={(event) => setCategory(event.target.value)}
+                required
+                value={category}
               />
-            </label>
-            <label className="block">
-              <span className="text-muted-foreground mb-1.5 block text-[.64rem] font-bold">
-                Tags
-              </span>
+            </Field>
+            <Field label="Author">
               <input
-                className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs outline-none"
+                className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs"
+                onChange={(event) => setAuthorName(event.target.value)}
+                required
+                value={authorName}
+              />
+            </Field>
+            <Field label="URL slug">
+              <input
+                className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs"
+                onChange={(event) => setSlug(event.target.value)}
+                required
+                value={slug}
+              />
+            </Field>
+            <Field label="Tags">
+              <input
+                className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs"
                 onChange={(event) => setTags(event.target.value)}
+                placeholder="Study, Exams, Learning"
                 value={tags}
               />
-              <span className="text-muted-foreground mt-1.5 block text-[.6rem]">
-                Separate tags with commas
-              </span>
-            </label>
-            <label className="border-border flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3">
-              <span>
-                <span className="text-foreground block text-xs font-bold">
-                  Featured story
-                </span>
-                <span className="text-muted-foreground mt-1 block text-[.6rem]">
-                  Show prominently on the blog landing page
-                </span>
+            </Field>
+            <Field label="Read time in minutes">
+              <input
+                className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs"
+                min={1}
+                onChange={(event) =>
+                  setReadTimeMinutes(Number(event.target.value))
+                }
+                type="number"
+                value={readTimeMinutes}
+              />
+            </Field>
+            <label className="border-border flex items-center justify-between gap-3 rounded-xl border p-3">
+              <span className="text-foreground text-xs font-bold">
+                Featured story
               </span>
               <input
                 checked={featured}
@@ -1099,309 +857,341 @@ function EditorPanel({
             </label>
           </div>
         </section>
-
         <section className="surface-card rounded-2xl p-5">
           <p className="text-foreground text-sm font-bold">Cover image</p>
-          <div className="from-primary/25 via-primary/10 to-surface-subtle mt-4 grid min-h-32 place-items-center rounded-2xl bg-gradient-to-br">
-            <BlogIcon className="text-primary size-7" name="image" />
+          <div className="mt-4 space-y-3">
+            <Field label="Image URL">
+              <input
+                className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs"
+                onChange={(event) => setCoverImageUrl(event.target.value)}
+                placeholder="https://…"
+                type="url"
+                value={coverImageUrl}
+              />
+            </Field>
+            <Field label="Alt text">
+              <input
+                className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs"
+                onChange={(event) => setCoverImageAlt(event.target.value)}
+                value={coverImageAlt}
+              />
+            </Field>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button
-              className="border-border hover:bg-surface-subtle h-9 rounded-xl border text-[.66rem] font-bold"
-              type="button"
-            >
-              Replace
-            </button>
-            <button
-              className="border-border hover:bg-surface-subtle h-9 rounded-xl border text-[.66rem] font-bold"
-              type="button"
-            >
-              From library
-            </button>
-          </div>
-          <label className="mt-4 block">
-            <span className="text-muted-foreground mb-1.5 block text-[.64rem] font-bold">
-              Alt text
-            </span>
-            <input
-              className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs outline-none"
-              defaultValue="Learner studying with Preppal"
-            />
-          </label>
         </section>
-
-        <section className="surface-card rounded-2xl p-5">
-          <p className="text-foreground text-sm font-bold">Search preview</p>
-          <div className="border-border mt-4 rounded-xl border p-3">
-            <p className="text-primary truncate text-xs font-semibold">
-              {title || "Article title"}
-            </p>
-            <p className="mt-1 truncate text-[.62rem] text-emerald-700 dark:text-emerald-400">
-              preppal.com/news/{slug}
-            </p>
-            <p className="text-muted-foreground mt-2 line-clamp-2 text-[.64rem] leading-4">
-              {excerpt || "Article description will appear here."}
-            </p>
-          </div>
-          <label className="mt-4 block">
-            <span className="text-muted-foreground mb-1.5 block text-[.64rem] font-bold">
-              URL slug
-            </span>
-            <input
-              className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs outline-none"
-              onChange={(event) => setSlug(event.target.value)}
-              value={slug}
-            />
-          </label>
-        </section>
+        {save.isError ? (
+          <p className="rounded-xl bg-rose-500/10 p-3 text-xs font-semibold text-rose-700">
+            {save.error.message}
+          </p>
+        ) : null}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            className="border-border h-11 rounded-xl border text-xs font-bold disabled:opacity-50"
+            disabled={disabled}
+            onClick={() => save.mutate({ nextStatus: "DRAFT" })}
+            type="button"
+          >
+            Save draft
+          </button>
+          <button
+            className="bg-primary text-primary-foreground h-11 rounded-xl text-xs font-bold disabled:opacity-50"
+            disabled={disabled}
+            type="submit"
+          >
+            {save.isPending
+              ? "Saving…"
+              : status === "PUBLISHED"
+                ? "Publish"
+                : "Save article"}
+          </button>
+        </div>
       </aside>
-    </div>
+    </form>
   );
 }
 
-function DiscussionsPanel() {
-  const [discussions, setDiscussions] =
-    useState<Discussion[]>(INITIAL_DISCUSSIONS);
-  const [filter, setFilter] = useState<"All" | DiscussionStatus>("All");
-  const visible = discussions.filter(
-    (discussion) => filter === "All" || discussion.status === filter,
+function Field({
+  label,
+  children,
+}: {
+  readonly label: string;
+  readonly children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="text-muted-foreground mb-1.5 block text-[.64rem] font-bold">
+        {label}
+      </span>
+      {children}
+    </label>
   );
+}
 
-  const updateStatus = (id: string, status: DiscussionStatus) => {
-    setDiscussions((items) =>
-      items.map((item) => (item.id === id ? { ...item, status } : item)),
-    );
-  };
-
+function DiscussionsPanel({
+  comments,
+  metrics,
+}: {
+  readonly comments: BlogComment[];
+  readonly metrics: BlogResponse["metrics"];
+}) {
+  const queryClient = useQueryClient();
+  const [filter, setFilter] = useState<"ALL" | DiscussionStatus>("ALL");
+  const [page, setPage] = useState(1);
+  const filtered = comments.filter(
+    (comment) => filter === "ALL" || comment.status === filter,
+  );
+  const pageSize = 5;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const visible = filtered.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
+  const refresh = () =>
+    queryClient.invalidateQueries({ queryKey: ["admin", "blog"] });
+  const moderate = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: DiscussionStatus }) =>
+      apiClient(`/api/v1/admin/blog/comments/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      }),
+    onSuccess: refresh,
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) =>
+      apiClient(`/api/v1/admin/blog/comments/${id}`, { method: "DELETE" }),
+    onSuccess: refresh,
+  });
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
       <section className="surface-card overflow-hidden rounded-[1.5rem]">
-        <div className="border-border flex flex-col gap-4 border-b p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div className="border-border flex items-center justify-between gap-4 border-b p-5 sm:p-6">
           <div>
             <p className="text-foreground text-base font-bold">
-              Discussion moderation
+              Discussion management
             </p>
             <p className="text-muted-foreground mt-1 text-xs">
-              Review learner comments before and after publication
+              Discussions are visible immediately. You can flag, hide, or remove
+              them when needed.
             </p>
           </div>
-          <select
-            className="border-border bg-background h-10 rounded-xl border px-3 text-xs font-semibold outline-none"
-            onChange={(event) =>
-              setFilter(event.target.value as "All" | DiscussionStatus)
-            }
+          <Select
+            className="border-border bg-background h-10 rounded-xl border px-3 text-xs"
+            onChange={(event) => {
+              setFilter(event.target.value as "ALL" | DiscussionStatus);
+              setPage(1);
+            }}
             value={filter}
           >
-            {["All", "Pending", "Approved", "Flagged", "Hidden"].map(
-              (option) => (
-                <option key={option}>{option}</option>
-              ),
-            )}
-          </select>
+            <option value="ALL">All statuses</option>
+            {Object.entries(DISCUSSION_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </Select>
         </div>
         <div className="divide-y">
-          {visible.map((discussion) => (
-            <article className="p-5 sm:p-6" key={discussion.id}>
+          {visible.map((comment) => (
+            <article className="p-5 sm:p-6" key={comment.id}>
               <div className="flex gap-3">
                 <span className="bg-primary/10 text-primary grid size-10 shrink-0 place-items-center rounded-full text-[.68rem] font-bold">
-                  {discussion.avatar}
+                  {initials(comment.authorName)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
                     <p className="text-foreground text-xs font-bold">
-                      {discussion.author}
+                      {comment.authorName}
                     </p>
                     <span className="text-muted-foreground text-[.62rem]">
-                      {discussion.time}
+                      {dateTime(comment.createdAt)}
                     </span>
-                    <StatusBadge status={discussion.status} />
+                    <StatusPill status={comment.status} />
                   </div>
                   <p className="text-muted-foreground mt-2 truncate text-[.66rem]">
-                    On: {discussion.article}
+                    On: {comment.articleTitle}
                   </p>
                   <p className="text-foreground mt-3 text-[.76rem] leading-6">
-                    {discussion.message}
+                    {comment.body}
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      className="border-border flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[.64rem] font-bold hover:bg-emerald-500/10 hover:text-emerald-700"
-                      onClick={() => updateStatus(discussion.id, "Approved")}
-                      type="button"
+                    <ModerateButton
+                      onClick={() =>
+                        moderate.mutate({ id: comment.id, status: "FLAGGED" })
+                      }
                     >
-                      <BlogIcon className="size-3.5" name="check" />
-                      Approve
-                    </button>
-                    <button
-                      className="border-border flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[.64rem] font-bold hover:bg-rose-500/10 hover:text-rose-700"
-                      onClick={() => updateStatus(discussion.id, "Flagged")}
-                      type="button"
+                      <Flag className="size-3.5" /> Flag
+                    </ModerateButton>
+                    <ModerateButton
+                      onClick={() =>
+                        moderate.mutate({ id: comment.id, status: "HIDDEN" })
+                      }
                     >
-                      <BlogIcon className="size-3.5" name="flag" />
-                      Flag
-                    </button>
-                    <button
-                      className="border-border hover:bg-surface-subtle flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[.64rem] font-bold"
-                      onClick={() => updateStatus(discussion.id, "Hidden")}
-                      type="button"
-                    >
-                      <BlogIcon className="size-3.5" name="eye" />
-                      Hide
-                    </button>
+                      <Eye className="size-3.5" /> Hide
+                    </ModerateButton>
                     <button
                       aria-label="Delete comment"
                       className="text-danger hover:bg-danger/10 grid size-8 place-items-center rounded-lg"
+                      onClick={() => remove.mutate(comment.id)}
                       type="button"
                     >
-                      <BlogIcon className="size-3.5" name="trash" />
+                      <Trash2 className="size-3.5" />
                     </button>
                   </div>
                 </div>
               </div>
             </article>
           ))}
+          {!visible.length ? (
+            <p className="text-muted-foreground py-14 text-center text-xs">
+              No discussions match this filter.
+            </p>
+          ) : null}
+        </div>
+        <div className="px-5 pb-4 sm:px-6">
+          <Pagination
+            currentPage={currentPage}
+            itemLabel="discussions"
+            onPageChange={setPage}
+            pageSize={pageSize}
+            totalItems={filtered.length}
+            totalPages={totalPages}
+          />
         </div>
       </section>
-
-      <aside className="space-y-5">
-        <section className="surface-card rounded-2xl p-5">
-          <p className="text-foreground text-sm font-bold">
-            Moderation summary
-          </p>
-          <div className="mt-4 space-y-3">
-            {[
-              ["Awaiting review", "12", "bg-amber-500"],
-              ["Approved today", "38", "bg-emerald-500"],
-              ["Flagged", "3", "bg-rose-500"],
-              ["Hidden", "6", "bg-slate-400"],
-            ].map(([label, value, tone]) => (
-              <div className="flex items-center gap-3" key={label}>
-                <span className={cn("size-2 rounded-full", tone)} />
-                <span className="text-muted-foreground flex-1 text-[.68rem]">
-                  {label}
-                </span>
-                <span className="text-foreground text-xs font-bold">
-                  {value}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-        <section className="rounded-2xl border border-amber-500/20 bg-amber-500/[.07] p-5">
-          <p className="text-foreground text-sm font-bold">
-            Community standard
-          </p>
-          <p className="text-muted-foreground mt-2 text-[.68rem] leading-5">
-            Remove harassment, spam, personal information, and content unrelated
-            to learning. Keep disagreement respectful and educational.
-          </p>
-          <button
-            className="text-primary mt-4 text-[.68rem] font-bold"
-            type="button"
-          >
-            Review moderation guide
-          </button>
-        </section>
+      <aside className="surface-card h-fit rounded-2xl p-5">
+        <p className="text-foreground text-sm font-bold">Moderation summary</p>
+        <div className="mt-4 space-y-3">
+          {[
+            ["Awaiting review", metrics.pendingDiscussions, "bg-amber-500"],
+            ["Approved", metrics.approvedDiscussions, "bg-emerald-500"],
+            ["Flagged", metrics.flaggedDiscussions, "bg-rose-500"],
+            ["Hidden", metrics.hiddenDiscussions, "bg-slate-400"],
+          ].map(([label, value, tone]) => (
+            <div className="flex items-center gap-3" key={String(label)}>
+              <span className={cn("size-2 rounded-full", tone)} />
+              <span className="text-muted-foreground flex-1 text-[.68rem]">
+                {label}
+              </span>
+              <span className="text-foreground text-xs font-bold">{value}</span>
+            </div>
+          ))}
+        </div>
       </aside>
     </div>
   );
 }
 
-function MediaPanel({
-  notify,
+function ModerateButton({
+  children,
+  onClick,
 }: {
-  readonly notify: (message: string) => void;
+  readonly children: React.ReactNode;
+  readonly onClick: () => void;
 }) {
+  return (
+    <button
+      className="border-border flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[.64rem] font-bold"
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
+  );
+}
+
+function MediaPanel({ media }: { readonly media: BlogMedia[] }) {
+  const [query, setQuery] = useState("");
+  const filtered = media.filter((item) =>
+    item.name.toLowerCase().includes(query.trim().toLowerCase()),
+  );
+  const usedBytes = media.reduce((sum, item) => sum + item.sizeBytes, 0);
   return (
     <div className="space-y-5">
       <section className="surface-card rounded-[1.5rem] p-5 sm:p-6">
         <div className="grid gap-5 lg:grid-cols-[.8fr_1.2fr] lg:items-center">
           <div>
             <p className="text-foreground text-base font-bold">Media library</p>
-            <p className="text-muted-foreground mt-2 max-w-md text-xs leading-5">
-              Manage cover images and inline article media. Images should be
-              optimised, descriptive, and licensed for publication.
+            <p className="text-muted-foreground mt-2 text-xs leading-5">
+              Persisted cover images and inline article media.
             </p>
-            <div className="text-muted-foreground mt-5 flex flex-wrap gap-4 text-[.66rem]">
-              <span>
-                <strong className="text-foreground">42</strong> assets
-              </span>
-              <span>
-                <strong className="text-foreground">18.4 MB</strong> used
-              </span>
-              <span>
-                <strong className="text-foreground">6</strong> unused
-              </span>
-            </div>
+            <p className="text-muted-foreground mt-4 text-[.66rem]">
+              <strong className="text-foreground">{media.length}</strong> assets
+              ·{" "}
+              <strong className="text-foreground">
+                {(usedBytes / 1_048_576).toFixed(1)} MB
+              </strong>{" "}
+              stored
+            </p>
           </div>
-          <button
-            className="border-primary/30 bg-primary/[.03] hover:bg-primary/[.06] flex min-h-36 flex-col items-center justify-center rounded-2xl border border-dashed p-6 text-center transition"
-            onClick={() => notify("Media upload selected.")}
-            type="button"
-          >
-            <span className="bg-primary/10 text-primary grid size-11 place-items-center rounded-2xl">
-              <BlogIcon className="size-5" name="upload" />
-            </span>
-            <span className="text-foreground mt-3 text-xs font-bold">
-              Upload images
-            </span>
-            <span className="text-muted-foreground mt-1 text-[.64rem]">
-              PNG, JPG or WebP · up to 5 MB
-            </span>
-          </button>
+          <div className="border-border bg-surface-subtle flex min-h-32 flex-col items-center justify-center rounded-2xl border border-dashed p-6 text-center">
+            <Upload className="text-primary size-5" />
+            <p className="text-foreground mt-2 text-xs font-bold">
+              Upload provider not connected
+            </p>
+            <p className="text-muted-foreground mt-1 text-[.62rem]">
+              Use a saved image URL in the editor until object storage is
+              configured.
+            </p>
+          </div>
         </div>
       </section>
-
       <section className="surface-card overflow-hidden rounded-[1.5rem]">
-        <div className="border-border flex flex-col gap-3 border-b p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <div className="border-border flex items-center justify-between gap-4 border-b p-5 sm:p-6">
           <div>
             <p className="text-foreground text-sm font-bold">All media</p>
             <p className="text-muted-foreground mt-1 text-xs">
-              Select an image to inspect usage and metadata
+              Assets recorded in the database
             </p>
           </div>
           <label className="border-border bg-background flex h-10 items-center gap-2 rounded-xl border px-3 sm:w-60">
-            <BlogIcon className="text-muted-foreground size-4" name="search" />
+            <Search className="text-muted-foreground size-4" />
             <input
-              className="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-xs outline-none"
+              className="min-w-0 flex-1 bg-transparent text-xs outline-none"
+              onChange={(event) => setQuery(event.target.value)}
               placeholder="Search media"
               type="search"
+              value={query}
             />
           </label>
         </div>
         <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
-          {MEDIA.map((item) => (
+          {filtered.map((item) => (
             <article
-              className="border-border group overflow-hidden rounded-2xl border"
+              className="border-border overflow-hidden rounded-2xl border"
               key={item.id}
             >
-              <div
-                className={cn(
-                  "relative grid aspect-video place-items-center bg-gradient-to-br",
-                  item.tone,
-                )}
-              >
-                <BlogIcon className="size-7 text-white/75" name="image" />
-                <button
-                  aria-label={`More options for ${item.name}`}
-                  className="absolute top-2 right-2 grid size-8 place-items-center rounded-lg bg-black/25 text-white opacity-0 backdrop-blur-sm transition group-hover:opacity-100"
-                  type="button"
-                >
-                  <BlogIcon className="size-4" name="more" />
-                </button>
+              <div className="bg-surface-subtle relative aspect-video">
+                <Image
+                  alt={item.altText ?? ""}
+                  className="object-cover"
+                  fill
+                  loading="lazy"
+                  sizes="320px"
+                  src={item.url}
+                />
               </div>
               <div className="p-3">
                 <p className="text-foreground truncate text-[.7rem] font-bold">
                   {item.name}
                 </p>
                 <p className="text-muted-foreground mt-1 text-[.62rem]">
-                  {item.meta}
+                  {item.width && item.height
+                    ? `${item.width} × ${item.height} · `
+                    : ""}
+                  {(item.sizeBytes / 1024).toFixed(0)} KB
                 </p>
                 <p className="text-primary mt-2 text-[.62rem] font-semibold">
-                  {item.used}
+                  Used by {item.usageCount} article
+                  {item.usageCount === 1 ? "" : "s"}
                 </p>
               </div>
             </article>
           ))}
+          {!filtered.length ? (
+            <p className="text-muted-foreground col-span-full py-14 text-center text-xs">
+              No saved media assets.
+            </p>
+          ) : null}
         </div>
       </section>
     </div>
@@ -1412,23 +1202,24 @@ export default function ContentPage() {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("overview");
   const [editingPost, setEditingPost] = useState<BlogPost | null>(null);
   const [notice, setNotice] = useState("");
-
+  const query = useQuery({
+    queryKey: ["admin", "blog"],
+    queryFn: () => apiClient<BlogResponse>("/api/v1/admin/blog"),
+  });
+  const data = query.data;
   const openEditor = (post?: BlogPost) => {
     setEditingPost(post ?? null);
     setNotice("");
     setActiveTab("editor");
   };
-
   const openTab = (tab: WorkspaceTab) => {
     setNotice("");
     setActiveTab(tab);
   };
-
   const notify = (message: string) => {
     setNotice(message);
-    window.setTimeout(() => setNotice(""), 2600);
+    window.setTimeout(() => setNotice(""), 3000);
   };
-
   return (
     <AdminShell>
       <div className="mx-auto w-full max-w-[1540px]">
@@ -1441,20 +1232,18 @@ export default function ContentPage() {
               Blog management
             </h1>
             <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-6">
-              Create thoughtful stories, manage the public journal, and keep
-              learner discussions healthy.
+              Create stories, manage publication, and moderate learner
+              discussions with live database data.
             </p>
           </div>
           <button
-            className="bg-primary text-primary-foreground hover:bg-primary-strong inline-flex h-11 w-fit items-center gap-2 rounded-xl px-4 text-xs font-bold shadow-[0_10px_25px_rgba(92,53,245,.2)] transition"
+            className="bg-primary text-primary-foreground inline-flex h-11 w-fit items-center gap-2 rounded-xl px-4 text-xs font-bold"
             onClick={() => openEditor()}
             type="button"
           >
-            <BlogIcon className="size-4" name="plus" />
-            Create new article
+            <Plus className="size-4" /> Create new article
           </button>
         </header>
-
         <nav
           aria-label="Blog management sections"
           className="border-border bg-surface mb-5 flex gap-1 overflow-x-auto rounded-2xl border p-1.5 shadow-sm"
@@ -1473,41 +1262,74 @@ export default function ContentPage() {
               type="button"
             >
               {tab.label}
-              {tab.value === "discussions" ? (
-                <span
-                  className={cn(
-                    "ml-2 rounded-full px-1.5 py-0.5 text-[.56rem]",
-                    activeTab === tab.value
-                      ? "bg-white/20 text-white"
-                      : "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-                  )}
-                >
-                  12
+              {tab.value === "discussions" &&
+              data?.metrics.pendingDiscussions ? (
+                <span className="ml-2 rounded-full bg-white/20 px-1.5 py-0.5 text-[.56rem]">
+                  {data.metrics.pendingDiscussions}
                 </span>
               ) : null}
             </button>
           ))}
         </nav>
-
         {notice ? (
           <div
             aria-live="polite"
-            className="border-success/25 bg-success/10 text-success mb-5 flex items-center gap-2 rounded-xl border px-4 py-3 text-xs font-semibold"
+            className="border-success/25 bg-surface text-success fixed top-5 right-5 z-50 flex max-w-[calc(100vw-2.5rem)] items-center gap-2 rounded-xl border px-4 py-3 text-xs font-semibold shadow-xl"
+            role="status"
           >
-            <BlogIcon className="size-4" name="check" />
+            <Check className="size-4" />
             {notice}
           </div>
         ) : null}
-
-        {activeTab === "overview" ? (
-          <OverviewPanel openEditor={openEditor} openTab={openTab} />
-        ) : null}
-        {activeTab === "posts" ? <PostsPanel editPost={openEditor} /> : null}
-        {activeTab === "editor" ? (
-          <EditorPanel editingPost={editingPost} notify={notify} />
-        ) : null}
-        {activeTab === "discussions" ? <DiscussionsPanel /> : null}
-        {activeTab === "media" ? <MediaPanel notify={notify} /> : null}
+        {query.isLoading ? (
+          <div className="text-muted-foreground flex min-h-[28rem] items-center justify-center gap-2 text-xs">
+            <span className="border-primary size-5 animate-spin rounded-full border-2 border-t-transparent" />
+            Loading blog records…
+          </div>
+        ) : query.isError || !data ? (
+          <div className="surface-card rounded-3xl p-10 text-center">
+            <p className="text-foreground text-sm font-bold">
+              Blog data is unavailable
+            </p>
+            <p className="text-muted-foreground mt-1 text-xs">
+              The database summary could not be loaded.
+            </p>
+            <button
+              className="text-primary mt-3 text-xs font-bold"
+              onClick={() => query.refetch()}
+              type="button"
+            >
+              Try again
+            </button>
+          </div>
+        ) : (
+          <>
+            {activeTab === "overview" ? (
+              <OverviewPanel
+                data={data}
+                openEditor={openEditor}
+                openTab={openTab}
+              />
+            ) : null}
+            {activeTab === "posts" ? (
+              <PostsPanel editPost={openEditor} posts={data.posts} />
+            ) : null}
+            {activeTab === "editor" ? (
+              <EditorPanel
+                editingPost={editingPost}
+                key={editingPost?.id ?? "new"}
+                onSaved={notify}
+              />
+            ) : null}
+            {activeTab === "discussions" ? (
+              <DiscussionsPanel
+                comments={data.comments}
+                metrics={data.metrics}
+              />
+            ) : null}
+            {activeTab === "media" ? <MediaPanel media={data.media} /> : null}
+          </>
+        )}
       </div>
     </AdminShell>
   );
