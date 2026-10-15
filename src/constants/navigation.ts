@@ -51,6 +51,12 @@ export const ADMIN_NAVIGATION: ReadonlyArray<{
     icon: "analytics",
     group: "Insights",
   },
+  {
+    label: "AI usage",
+    href: "/ai-usage",
+    icon: "ai",
+    group: "Insights",
+  },
   { label: "Settings", href: "/settings", icon: "settings", group: "System" },
 ];
 

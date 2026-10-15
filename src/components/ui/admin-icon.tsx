@@ -1,6 +1,7 @@
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
+  Bot,
   ChartNoAxesCombined,
   FileQuestion,
   Gift,
@@ -16,6 +17,7 @@ import {
 export type AdminIconName =
   | "analytics"
   | "blog"
+  | "ai"
   | "content"
   | "dashboard"
   | "deposits"
@@ -30,6 +32,7 @@ interface AdminIconProps extends LucideProps {
 }
 
 const ADMIN_ICONS: Record<AdminIconName, LucideIcon> = {
+  ai: Bot,
   analytics: ChartNoAxesCombined,
   blog: Newspaper,
   content: FileQuestion,
