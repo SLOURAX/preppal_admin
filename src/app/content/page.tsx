@@ -13,12 +13,19 @@ import {
   Search,
   Trash2,
   Upload,
+  WandSparkles,
+  LoaderCircle,
+  X,
 } from "lucide-react";
 import Image from "next/image";
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { Pagination } from "@/components/admin-ui";
-import { RichContentEditor } from "@/components/rich-content-editor";
+import {
+  RichContent,
+  RichContentEditor,
+} from "@/components/rich-content-editor";
 import { AdminShell } from "@/components/layout";
 import { AdminIcon, Select } from "@/components/ui";
 import { apiClient } from "@/lib/api/client";
@@ -116,6 +123,28 @@ interface SavePostInput {
   scheduledAt?: string;
 }
 
+interface MagicBlogDraft {
+  title: string;
+  excerpt: string;
+  contentHtml: string;
+  category: string;
+  tags: string[];
+  readTimeMinutes: number;
+  status: "DRAFT";
+}
+
+interface BlogPreviewValue {
+  title: string;
+  excerpt: string;
+  content: string;
+  category: string;
+  authorName: string;
+  coverImageUrl: string;
+  coverImageAlt: string;
+  tags: string[];
+  readTimeMinutes: number;
+}
+
 const TABS: ReadonlyArray<{ label: string; value: WorkspaceTab }> = [
   { label: "Overview", value: "overview" },
   { label: "Articles", value: "posts" },
@@ -157,6 +186,19 @@ const initials = (name: string) =>
     .map((part) => part[0])
     .join("")
     .toUpperCase();
+
+const isPreviewableImageUrl = (value: string) => {
+  if (value.startsWith("/")) return true;
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" ||
+      (url.protocol === "http:" && url.hostname === "localhost")
+    );
+  } catch {
+    return false;
+  }
+};
 
 const escapeHtml = (value: string) =>
   value.replace(
@@ -662,6 +704,48 @@ function EditorPanel({
   const [scheduledAt, setScheduledAt] = useState(
     editingPost?.scheduledAt?.slice(0, 16) ?? "",
   );
+  const [showMagicWriter, setShowMagicWriter] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [magicBrief, setMagicBrief] = useState("");
+  const [magicAudience, setMagicAudience] = useState(
+    "Secondary-school learners and their parents",
+  );
+  const [magicTone, setMagicTone] = useState("practical");
+  const [magicLength, setMagicLength] = useState("standard");
+  const [magicCategory, setMagicCategory] = useState(category);
+  const [magicKeywords, setMagicKeywords] = useState("");
+  const generateDraft = useMutation({
+    mutationFn: () =>
+      apiClient<MagicBlogDraft>("/api/v1/admin/blog/ai-draft", {
+        method: "POST",
+        body: JSON.stringify({
+          context: magicBrief.trim(),
+          audience: magicAudience.trim() || undefined,
+          tone: magicTone,
+          length: magicLength,
+          category: magicCategory.trim() || undefined,
+          keywords: magicKeywords.trim() || undefined,
+        }),
+      }),
+    onSuccess: (draft) => {
+      setTitle(draft.title);
+      setSlug(
+        draft.title
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)/g, ""),
+      );
+      setExcerpt(draft.excerpt);
+      setContent(draft.contentHtml);
+      setCategory(draft.category);
+      setTags(draft.tags.join(", "));
+      setReadTimeMinutes(draft.readTimeMinutes);
+      setStatus("DRAFT");
+      setShowMagicWriter(false);
+      onSaved("AI draft created. Review and edit it before publishing.");
+    },
+  });
   const save = useMutation({
     mutationFn: ({ nextStatus }: { nextStatus: PostStatus }) => {
       const input: SavePostInput = {
@@ -726,8 +810,140 @@ function EditorPanel({
               Content is saved directly to the blog database.
             </p>
           </div>
-          <StatusPill status={status} />
+          <div className="flex items-center gap-2">
+            {!editingPost ? (
+              <button
+                className="border-primary/25 bg-primary/5 text-primary inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-[.68rem] font-bold"
+                onClick={() => setShowMagicWriter((visible) => !visible)}
+                type="button"
+              >
+                <WandSparkles className="size-4" /> Magic blog creator
+              </button>
+            ) : null}
+            <StatusPill status={status} />
+          </div>
         </div>
+        {showMagicWriter ? (
+          <section className="border-primary/20 from-primary/10 via-primary/5 to-background mb-5 rounded-2xl border bg-gradient-to-br p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-foreground flex items-center gap-2 text-sm font-bold">
+                  <WandSparkles className="text-primary size-4" /> Magic blog
+                  creator
+                </p>
+                <p className="text-muted-foreground mt-1 text-[.68rem] leading-5">
+                  Give Preppal AI the substance. It will prepare a polished
+                  draft inside the editor—never publish it automatically.
+                </p>
+              </div>
+              <button
+                aria-label="Close magic blog creator"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={() => setShowMagicWriter(false)}
+                type="button"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <label className="mt-4 block">
+              <span className="text-foreground mb-1.5 block text-[.68rem] font-bold">
+                What should the article communicate?
+              </span>
+              <textarea
+                className="border-border bg-background focus:border-primary min-h-28 w-full rounded-xl border p-3 text-xs leading-5 outline-none"
+                maxLength={4000}
+                onChange={(event) => setMagicBrief(event.target.value)}
+                placeholder="Include the central idea, facts that must be covered, desired takeaway, and any links or references the writer may use."
+                value={magicBrief}
+              />
+              <span className="text-muted-foreground mt-1 block text-[.6rem]">
+                {magicBrief.length.toLocaleString()} / 4,000 characters · at
+                least 20 required
+              </span>
+            </label>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Field label="Audience">
+                <input
+                  className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs"
+                  maxLength={120}
+                  onChange={(event) => setMagicAudience(event.target.value)}
+                  value={magicAudience}
+                />
+              </Field>
+              <Field label="Tone">
+                <Select
+                  className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs"
+                  onChange={(event) => setMagicTone(event.target.value)}
+                  value={magicTone}
+                >
+                  <option value="practical">Practical</option>
+                  <option value="authoritative">Authoritative</option>
+                  <option value="friendly">Friendly</option>
+                  <option value="inspiring">Inspiring</option>
+                  <option value="conversational">Conversational</option>
+                </Select>
+              </Field>
+              <Field label="Length">
+                <Select
+                  className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs"
+                  onChange={(event) => setMagicLength(event.target.value)}
+                  value={magicLength}
+                >
+                  <option value="short">Short · 450–600 words</option>
+                  <option value="standard">Standard · 700–900 words</option>
+                  <option value="long">Long · 1,000–1,200 words</option>
+                </Select>
+              </Field>
+              <Field label="Category">
+                <input
+                  className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs"
+                  maxLength={80}
+                  onChange={(event) => setMagicCategory(event.target.value)}
+                  value={magicCategory}
+                />
+              </Field>
+              <div className="sm:col-span-2">
+                <Field label="Keywords (optional)">
+                  <input
+                    className="border-border bg-background h-10 w-full rounded-xl border px-3 text-xs"
+                    maxLength={300}
+                    onChange={(event) => setMagicKeywords(event.target.value)}
+                    placeholder="JAMB preparation, study habits, exam confidence"
+                    value={magicKeywords}
+                  />
+                </Field>
+              </div>
+            </div>
+            {generateDraft.isError ? (
+              <p className="mt-3 rounded-xl bg-rose-500/10 p-3 text-xs font-semibold text-rose-700">
+                {generateDraft.error.message}
+              </p>
+            ) : null}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-muted-foreground text-[.62rem]">
+                AI output is a draft. Verify facts, links, and claims before
+                publishing.
+              </p>
+              <button
+                className="bg-primary text-primary-foreground inline-flex h-10 items-center gap-2 rounded-xl px-4 text-xs font-bold disabled:opacity-50"
+                disabled={
+                  magicBrief.trim().length < 20 || generateDraft.isPending
+                }
+                onClick={() => generateDraft.mutate()}
+                type="button"
+              >
+                {generateDraft.isPending ? (
+                  <LoaderCircle className="size-4 animate-spin" />
+                ) : (
+                  <WandSparkles className="size-4" />
+                )}
+                {generateDraft.isPending
+                  ? "Writing draft…"
+                  : "Create editable draft"}
+              </button>
+            </div>
+          </section>
+        ) : null}
         <div className="space-y-4">
           <label className="block">
             <span className="text-muted-foreground mb-1.5 block text-[.66rem] font-bold">
@@ -883,6 +1099,14 @@ function EditorPanel({
             {save.error.message}
           </p>
         ) : null}
+        <button
+          className="border-primary/25 bg-primary/5 text-primary inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border text-xs font-bold disabled:opacity-50"
+          disabled={!title.trim() && !content.trim()}
+          onClick={() => setShowPreview(true)}
+          type="button"
+        >
+          <Eye className="size-4" /> Preview article
+        </button>
         <div className="grid grid-cols-2 gap-2">
           <button
             className="border-border h-11 rounded-xl border text-xs font-bold disabled:opacity-50"
@@ -905,7 +1129,136 @@ function EditorPanel({
           </button>
         </div>
       </aside>
+      {showPreview ? (
+        <BlogPreview
+          onClose={() => setShowPreview(false)}
+          value={{
+            title,
+            excerpt,
+            content,
+            category,
+            authorName,
+            coverImageUrl,
+            coverImageAlt,
+            tags: tags
+              .split(",")
+              .map((tag) => tag.trim())
+              .filter(Boolean),
+            readTimeMinutes,
+          }}
+        />
+      ) : null}
     </form>
+  );
+}
+
+function BlogPreview({
+  onClose,
+  value,
+}: {
+  readonly onClose: () => void;
+  readonly value: BlogPreviewValue;
+}) {
+  return createPortal(
+    <div className="fixed inset-0 z-[120] overflow-y-auto bg-slate-950/55 p-3 backdrop-blur-sm sm:p-6">
+      <button
+        aria-label="Close article preview"
+        className="fixed inset-0 cursor-default"
+        onClick={onClose}
+        type="button"
+      />
+      <section
+        aria-labelledby="blog-preview-title"
+        aria-modal="true"
+        className="bg-background border-border relative z-10 mx-auto min-h-[calc(100vh-1.5rem)] w-full max-w-5xl overflow-hidden rounded-[1.75rem] border shadow-2xl sm:min-h-0"
+        role="dialog"
+      >
+        <header className="border-border bg-background/95 sticky top-0 z-20 flex items-center justify-between gap-4 border-b px-4 py-3 backdrop-blur sm:px-6">
+          <div>
+            <p
+              className="text-foreground text-sm font-bold"
+              id="blog-preview-title"
+            >
+              Article preview
+            </p>
+            <p className="text-muted-foreground mt-0.5 text-[.62rem]">
+              Previewing the current unsaved editor content
+            </p>
+          </div>
+          <button
+            className="border-border text-muted-foreground hover:text-foreground grid size-9 place-items-center rounded-xl border"
+            onClick={onClose}
+            type="button"
+          >
+            <X className="size-4" />
+          </button>
+        </header>
+
+        <article className="mx-auto max-w-3xl px-5 py-8 sm:px-8 sm:py-12">
+          <div className="flex flex-wrap items-center gap-2 text-[.66rem] font-semibold">
+            <span className="bg-primary/10 text-primary rounded-full px-3 py-1">
+              {value.category.trim() || "Uncategorised"}
+            </span>
+            <span className="text-muted-foreground">
+              {Math.max(1, value.readTimeMinutes || 1)} min read
+            </span>
+          </div>
+          <h1 className="text-foreground mt-5 text-2xl leading-tight font-extrabold tracking-tight sm:text-4xl">
+            {value.title.trim() || "Untitled article"}
+          </h1>
+          {value.excerpt.trim() ? (
+            <p className="text-muted-foreground mt-4 text-sm leading-7 sm:text-base">
+              {value.excerpt}
+            </p>
+          ) : null}
+          <div className="border-border text-muted-foreground mt-5 flex flex-wrap items-center gap-x-2 gap-y-1 border-b pb-6 text-[.68rem]">
+            <span className="text-foreground font-bold">
+              {value.authorName.trim() || "Preppal Learning Team"}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>Preview</span>
+          </div>
+
+          {isPreviewableImageUrl(value.coverImageUrl.trim()) ? (
+            <div className="bg-surface-subtle relative mt-7 aspect-[16/8] overflow-hidden rounded-2xl">
+              <Image
+                alt={value.coverImageAlt.trim() || value.title.trim()}
+                className="object-cover"
+                fill
+                priority
+                sizes="(max-width: 768px) 100vw, 768px"
+                src={value.coverImageUrl.trim()}
+              />
+            </div>
+          ) : null}
+
+          {value.content.trim() ? (
+            <RichContent
+              className="text-foreground mt-8 space-y-4 text-sm leading-7 sm:text-[.94rem] [&_h2]:mt-9 [&_h2]:text-xl [&_h2]:font-bold [&_h3]:mt-7 [&_h3]:text-base [&_h3]:font-bold [&_p]:leading-7"
+              html={value.content}
+            />
+          ) : (
+            <p className="text-muted-foreground border-border mt-8 rounded-2xl border border-dashed px-4 py-12 text-center text-sm">
+              Article content will appear here.
+            </p>
+          )}
+
+          {value.tags.length ? (
+            <div className="border-border mt-10 flex flex-wrap gap-2 border-t pt-6">
+              {value.tags.map((tag) => (
+                <span
+                  className="bg-surface-subtle text-muted-foreground rounded-full px-3 py-1.5 text-[.64rem] font-semibold"
+                  key={tag}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </article>
+      </section>
+    </div>,
+    document.body,
   );
 }
 

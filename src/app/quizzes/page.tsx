@@ -12,7 +12,10 @@ import {
   Pencil,
   Plus,
   Search,
+  Sparkles,
   Tags,
+  Trash2,
+  LoaderCircle,
   X,
 } from "lucide-react";
 import { FormEvent, ReactNode, useState } from "react";
@@ -99,7 +102,9 @@ interface Question {
   examSubjectYear?: {
     id: string;
     examYear: { id: string; year: number };
-    examSubject: Pick<ExamSubject, "id" | "name" | "slug"> & { exam: Pick<Exam, "id" | "name" | "slug"> };
+    examSubject: Pick<ExamSubject, "id" | "name" | "slug"> & {
+      exam: Pick<Exam, "id" | "name" | "slug">;
+    };
   };
 }
 interface Flag {
@@ -116,6 +121,22 @@ interface Workspace {
   flags: Flag[];
   metrics: Partial<Record<Status, number>>;
   pagination: { page: number; pageSize: number; total: number; pages: number };
+}
+interface BatchDraftQuestion {
+  path: "STANDALONE";
+  subjectId: string;
+  topicId?: string;
+  prompt: string;
+  passage?: string;
+  explanation?: string;
+  difficulty: Difficulty;
+  status: Status;
+  options: Option[];
+}
+interface GeneratedBatch {
+  subject: { id: string; name: string };
+  topic: { id: string; name: string } | null;
+  questions: BatchDraftQuestion[];
 }
 
 const tabs = [
@@ -154,10 +175,12 @@ function Modal({
   children,
   onClose,
   title,
+  wide = false,
 }: {
   children: ReactNode;
   onClose: () => void;
   title: string;
+  wide?: boolean;
 }) {
   return createPortal(
     <div className="fixed inset-0 z-[100] grid place-items-center overflow-y-auto bg-slate-950/40 p-4 backdrop-blur-sm">
@@ -169,7 +192,7 @@ function Modal({
       />
       <section
         aria-modal="true"
-        className="bg-surface border-border relative z-10 max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl border p-5 shadow-2xl sm:p-6"
+        className={`bg-surface border-border relative z-10 max-h-[92vh] w-full overflow-y-auto rounded-3xl border p-5 shadow-2xl sm:p-6 ${wide ? "max-w-5xl" : "max-w-2xl"}`}
         role="dialog"
       >
         <div className="mb-5 flex items-center justify-between">
@@ -301,13 +324,10 @@ function ExamSetup({
   };
   const addNewSubject = useMutation({
     mutationFn: () =>
-      apiClient(
-        `/api/v1/admin/question-bank/exams/${exam.id}/subjects`,
-        {
-          method: "POST",
-          body: JSON.stringify({ name: newSubject.trim() }),
-        },
-      ),
+      apiClient(`/api/v1/admin/question-bank/exams/${exam.id}/subjects`, {
+        method: "POST",
+        body: JSON.stringify({ name: newSubject.trim() }),
+      }),
     onSuccess: async () => {
       setNewSubject("");
       await refresh("Exam subject created.");
@@ -466,7 +486,7 @@ function ExamSetup({
               ))}
               {!exam.subjects.length ? (
                 <Empty title="No subjects">
-              Create the first subject for this exam.
+                  Create the first subject for this exam.
                 </Empty>
               ) : null}
             </div>
@@ -496,6 +516,9 @@ function Standalone({
 }) {
   const cache = useQueryClient();
   const [create, setCreate] = useState(false);
+  const [magicCreatorSubjectId, setMagicCreatorSubjectId] = useState<
+    string | null
+  >(null);
   const [owner, setOwner] = useState("");
   const [topic, setTopic] = useState("");
   const add = useMutation({
@@ -513,13 +536,25 @@ function Standalone({
   return (
     <SectionCard
       actions={
-        <button
-          className={primary}
-          onClick={() => setCreate(true)}
-          type="button"
-        >
-          <Plus className="size-3.5" /> New subject
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className={secondary}
+            disabled={!data.standaloneSubjects.length}
+            onClick={() =>
+              setMagicCreatorSubjectId(data.standaloneSubjects[0]?.id ?? null)
+            }
+            type="button"
+          >
+            <Sparkles className="size-3.5" /> Magic question batch
+          </button>
+          <button
+            className={primary}
+            onClick={() => setCreate(true)}
+            type="button"
+          >
+            <Plus className="size-3.5" /> New subject
+          </button>
+        </div>
       }
       description="These subjects are independent and do not require an exam or year."
       title="Standalone subjects"
@@ -550,6 +585,13 @@ function Standalone({
                 </span>
               ))}
             </div>
+            <button
+              className="text-primary mt-3 inline-flex items-center gap-1.5 text-[.6rem] font-bold"
+              onClick={() => setMagicCreatorSubjectId(subject.id)}
+              type="button"
+            >
+              <Sparkles className="size-3.5" /> Generate question batch
+            </button>
             <form
               className="border-border mt-3 flex gap-2 border-t pt-3"
               onSubmit={(event) => {
@@ -592,7 +634,473 @@ function Standalone({
           }}
         />
       ) : null}
+      {magicCreatorSubjectId ? (
+        <MagicStandaloneCreator
+          data={data}
+          initialSubjectId={magicCreatorSubjectId}
+          onClose={() => setMagicCreatorSubjectId(null)}
+          onDone={(message) => {
+            setMagicCreatorSubjectId(null);
+            notify(message);
+          }}
+        />
+      ) : null}
     </SectionCard>
+  );
+}
+
+function MagicStandaloneCreator({
+  data,
+  initialSubjectId,
+  onClose,
+  onDone,
+}: {
+  data: Workspace;
+  initialSubjectId: string;
+  onClose: () => void;
+  onDone: (value: string) => void;
+}) {
+  const cache = useQueryClient();
+  const [subjectId, setSubjectId] = useState(initialSubjectId);
+  const [topicId, setTopicId] = useState("");
+  const [difficulty, setDifficulty] = useState<Difficulty | "MIXED">("MIXED");
+  const [style, setStyle] = useState<
+    "MIXED" | "CONCEPTUAL" | "APPLIED" | "COMPREHENSION"
+  >("MIXED");
+  const [count, setCount] = useState(5);
+  const [context, setContext] = useState("");
+  const [questions, setQuestions] = useState<BatchDraftQuestion[]>([]);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [saveStatus, setSaveStatus] = useState<Status>("DRAFT");
+  const subject = data.standaloneSubjects.find((item) => item.id === subjectId);
+  const selectedQuestions = questions.filter((_, index) => selected.has(index));
+  const selectedAreValid =
+    selectedQuestions.length > 0 &&
+    selectedQuestions.every(
+      (question) =>
+        plainText(question.prompt).length >= 5 &&
+        question.options.length >= 2 &&
+        question.options.every((option) => plainText(option.text).length > 0) &&
+        question.options.filter((option) => option.isCorrect).length === 1,
+    );
+
+  const generate = useMutation({
+    mutationFn: () =>
+      apiClient<GeneratedBatch>(
+        "/api/v1/admin/question-bank/questions/ai-batch",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            subjectId,
+            topicId: topicId || undefined,
+            difficulty,
+            style,
+            count,
+            context: context.trim(),
+          }),
+        },
+      ),
+    onSuccess: (result) => {
+      setQuestions(result.questions);
+      setSelected(new Set(result.questions.map((_, index) => index)));
+    },
+  });
+  const save = useMutation({
+    mutationFn: () =>
+      apiClient<{ created: number }>(
+        "/api/v1/admin/question-bank/questions/batch",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            questions: selectedQuestions.map((question) => ({
+              ...question,
+              status: saveStatus,
+            })),
+          }),
+        },
+      ),
+    onSuccess: async (result) => {
+      await cache.invalidateQueries({ queryKey: ["admin", "question-bank"] });
+      onDone(
+        `${result.created} question${result.created === 1 ? "" : "s"} added to the question bank.`,
+      );
+    },
+  });
+  const updateQuestion = (
+    index: number,
+    update: (question: BatchDraftQuestion) => BatchDraftQuestion,
+  ) =>
+    setQuestions((current) =>
+      current.map((question, itemIndex) =>
+        itemIndex === index ? update(question) : question,
+      ),
+    );
+  const removeQuestion = (index: number) => {
+    const next = questions.filter((_, itemIndex) => itemIndex !== index);
+    setQuestions(next);
+    setSelected(new Set(next.map((_, itemIndex) => itemIndex)));
+  };
+
+  return (
+    <Modal onClose={onClose} title="Magic standalone question creator" wide>
+      {!questions.length ? (
+        <div className="space-y-5">
+          <div className="border-primary/20 from-primary/10 via-primary/5 to-surface rounded-2xl border bg-gradient-to-br p-4">
+            <div className="flex items-start gap-3">
+              <span className="bg-primary text-primary-foreground grid size-9 shrink-0 place-items-center rounded-xl">
+                <Sparkles className="size-4" />
+              </span>
+              <div>
+                <p className="text-foreground text-[.76rem] font-bold">
+                  Build a review-ready question set
+                </p>
+                <p className="text-muted-foreground mt-1 text-[.64rem] leading-5">
+                  AI creates editable drafts only. Review the wording, answer,
+                  explanation, and difficulty before selecting what enters the
+                  question bank.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="text-foreground text-[.63rem] font-bold">
+              Standalone subject
+              <Select
+                className={`${input} mt-1.5`}
+                onChange={(event) => {
+                  setSubjectId(event.target.value);
+                  setTopicId("");
+                }}
+                value={subjectId}
+              >
+                {data.standaloneSubjects.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="text-foreground text-[.63rem] font-bold">
+              Topic
+              <Select
+                className={`${input} mt-1.5`}
+                onChange={(event) => setTopicId(event.target.value)}
+                value={topicId}
+              >
+                <option value="">Broad subject coverage</option>
+                {subject?.topics.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="text-foreground text-[.63rem] font-bold">
+              Difficulty
+              <Select
+                className={`${input} mt-1.5`}
+                onChange={(event) =>
+                  setDifficulty(event.target.value as Difficulty | "MIXED")
+                }
+                value={difficulty}
+              >
+                {(["MIXED", "EASY", "MEDIUM", "HARD"] as const).map((item) => (
+                  <option key={item} value={item}>
+                    {labels(item)}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="text-foreground text-[.63rem] font-bold">
+              Number of questions
+              <input
+                className={`${input} mt-1.5`}
+                max={20}
+                min={2}
+                onChange={(event) =>
+                  setCount(
+                    Math.min(20, Math.max(2, Number(event.target.value))),
+                  )
+                }
+                type="number"
+                value={count}
+              />
+            </label>
+          </div>
+          <label className="text-foreground block text-[.63rem] font-bold">
+            Question style
+            <Select
+              className={`${input} mt-1.5 max-w-sm`}
+              onChange={(event) =>
+                setStyle(
+                  event.target.value as
+                    "MIXED" | "CONCEPTUAL" | "APPLIED" | "COMPREHENSION",
+                )
+              }
+              value={style}
+            >
+              <option value="MIXED">Mixed question styles</option>
+              <option value="CONCEPTUAL">Conceptual understanding</option>
+              <option value="APPLIED">Applied problem solving</option>
+              <option value="COMPREHENSION">Comprehension and context</option>
+            </Select>
+          </label>
+          <label className="text-foreground block text-[.63rem] font-bold">
+            Coverage and authoring brief
+            <textarea
+              className="border-border bg-background focus:border-primary mt-1.5 min-h-32 w-full rounded-xl border p-3 text-[.7rem] leading-5 outline-none"
+              maxLength={3000}
+              onChange={(event) => setContext(event.target.value)}
+              placeholder="Describe the concepts to assess, curriculum boundaries, learning objectives, terminology, calculations, or material the questions must use."
+              value={context}
+            />
+            <span className="text-muted-foreground mt-1 block text-[.56rem] font-normal">
+              {context.length.toLocaleString()} / 3,000 characters · minimum 20
+            </span>
+          </label>
+          {generate.isError ? (
+            <p className="bg-danger/10 text-danger rounded-xl p-3 text-[.65rem] font-semibold">
+              {generate.error.message}
+            </p>
+          ) : null}
+          <div className="flex justify-end">
+            <button
+              className={primary}
+              disabled={
+                !subjectId || context.trim().length < 20 || generate.isPending
+              }
+              onClick={() => generate.mutate()}
+              type="button"
+            >
+              {generate.isPending ? (
+                <LoaderCircle className="size-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="size-3.5" />
+              )}
+              {generate.isPending
+                ? `Creating ${count} questions…`
+                : `Create ${count} review drafts`}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="border-border bg-surface-subtle/50 flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-3">
+            <div>
+              <p className="text-foreground text-[.72rem] font-bold">
+                Review {questions.length} generated questions
+              </p>
+              <p className="text-muted-foreground mt-1 text-[.59rem]">
+                {selected.size} selected · edit every field before saving
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                className={secondary}
+                onClick={() => {
+                  setQuestions([]);
+                  setSelected(new Set());
+                }}
+                type="button"
+              >
+                <Sparkles className="size-3.5" /> Generate again
+              </button>
+              <button
+                className={secondary}
+                onClick={() =>
+                  setSelected(
+                    selected.size === questions.length
+                      ? new Set()
+                      : new Set(questions.map((_, index) => index)),
+                  )
+                }
+                type="button"
+              >
+                {selected.size === questions.length
+                  ? "Clear selection"
+                  : "Select all"}
+              </button>
+            </div>
+          </div>
+
+          {questions.map((question, questionIndex) => (
+            <article
+              className={`rounded-2xl border p-4 ${selected.has(questionIndex) ? "border-primary/35 bg-primary/[.025]" : "border-border opacity-70"}`}
+              key={questionIndex}
+            >
+              <div className="flex items-center gap-3">
+                <input
+                  aria-label={`Select question ${questionIndex + 1}`}
+                  checked={selected.has(questionIndex)}
+                  className="accent-primary size-4"
+                  onChange={(event) => {
+                    const next = new Set(selected);
+                    if (event.target.checked) next.add(questionIndex);
+                    else next.delete(questionIndex);
+                    setSelected(next);
+                  }}
+                  type="checkbox"
+                />
+                <p className="text-foreground text-[.7rem] font-bold">
+                  Question {questionIndex + 1}
+                </p>
+                <StatusBadge tone="info">
+                  {labels(question.difficulty)}
+                </StatusBadge>
+                <button
+                  aria-label={`Remove question ${questionIndex + 1}`}
+                  className="text-danger hover:bg-danger/10 ml-auto grid size-8 place-items-center rounded-lg"
+                  onClick={() => removeQuestion(questionIndex)}
+                  type="button"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </div>
+              <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_150px]">
+                <label className="text-foreground text-[.61rem] font-bold">
+                  Question prompt
+                  <textarea
+                    className="border-border bg-background mt-1.5 min-h-20 w-full rounded-xl border p-3 text-[.68rem] leading-5 outline-none"
+                    onChange={(event) =>
+                      updateQuestion(questionIndex, (current) => ({
+                        ...current,
+                        prompt: event.target.value,
+                      }))
+                    }
+                    value={question.prompt}
+                  />
+                </label>
+                <label className="text-foreground text-[.61rem] font-bold">
+                  Difficulty
+                  <Select
+                    className={`${input} mt-1.5`}
+                    onChange={(event) =>
+                      updateQuestion(questionIndex, (current) => ({
+                        ...current,
+                        difficulty: event.target.value as Difficulty,
+                      }))
+                    }
+                    value={question.difficulty}
+                  >
+                    {(["EASY", "MEDIUM", "HARD"] as const).map((item) => (
+                      <option key={item} value={item}>
+                        {labels(item)}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {question.options.map((option, optionIndex) => (
+                  <label
+                    className={`flex items-center gap-2 rounded-xl border p-2 ${option.isCorrect ? "border-success/40 bg-success/5" : "border-border bg-background"}`}
+                    key={option.label}
+                  >
+                    <input
+                      checked={option.isCorrect}
+                      name={`correct-${questionIndex}`}
+                      onChange={() =>
+                        updateQuestion(questionIndex, (current) => ({
+                          ...current,
+                          options: current.options.map((item, itemIndex) => ({
+                            ...item,
+                            isCorrect: itemIndex === optionIndex,
+                          })),
+                        }))
+                      }
+                      type="radio"
+                    />
+                    <span className="text-muted-foreground text-[.6rem] font-bold">
+                      {option.label}
+                    </span>
+                    <input
+                      className="min-w-0 flex-1 bg-transparent text-[.67rem] outline-none"
+                      onChange={(event) =>
+                        updateQuestion(questionIndex, (current) => ({
+                          ...current,
+                          options: current.options.map((item, itemIndex) =>
+                            itemIndex === optionIndex
+                              ? { ...item, text: event.target.value }
+                              : item,
+                          ),
+                        }))
+                      }
+                      value={option.text}
+                    />
+                  </label>
+                ))}
+              </div>
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                <label className="text-foreground text-[.61rem] font-bold">
+                  Passage or shared context
+                  <textarea
+                    className="border-border bg-background mt-1.5 min-h-20 w-full rounded-xl border p-3 text-[.66rem] leading-5 outline-none"
+                    onChange={(event) =>
+                      updateQuestion(questionIndex, (current) => ({
+                        ...current,
+                        passage: event.target.value,
+                      }))
+                    }
+                    placeholder="Optional"
+                    value={question.passage ?? ""}
+                  />
+                </label>
+                <label className="text-foreground text-[.61rem] font-bold">
+                  Answer explanation
+                  <textarea
+                    className="border-border bg-background mt-1.5 min-h-20 w-full rounded-xl border p-3 text-[.66rem] leading-5 outline-none"
+                    onChange={(event) =>
+                      updateQuestion(questionIndex, (current) => ({
+                        ...current,
+                        explanation: event.target.value,
+                      }))
+                    }
+                    value={question.explanation ?? ""}
+                  />
+                </label>
+              </div>
+            </article>
+          ))}
+
+          {save.isError ? (
+            <p className="bg-danger/10 text-danger rounded-xl p-3 text-[.65rem] font-semibold">
+              {save.error.message}
+            </p>
+          ) : null}
+          <div className="border-border bg-surface sticky bottom-0 flex flex-wrap items-end justify-between gap-3 border-t py-3">
+            <label className="text-foreground text-[.61rem] font-bold">
+              Save selected as
+              <Select
+                className={`${input} mt-1.5 w-44`}
+                onChange={(event) =>
+                  setSaveStatus(event.target.value as Status)
+                }
+                value={saveStatus}
+              >
+                <option value="DRAFT">Draft</option>
+                <option value="IN_REVIEW">In review</option>
+                <option value="PUBLISHED">Published</option>
+              </Select>
+            </label>
+            <button
+              className={primary}
+              disabled={!selectedAreValid || save.isPending}
+              onClick={() => save.mutate()}
+              type="button"
+            >
+              {save.isPending ? (
+                <LoaderCircle className="size-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="size-3.5" />
+              )}
+              {save.isPending
+                ? "Saving batch…"
+                : `Save ${selectedQuestions.length} selected`}
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -640,9 +1148,7 @@ function Editor({
     })) ?? blankOptions,
   );
   const exam = data.exams.find((item) => item.id === examId);
-  const examSubject = exam?.subjects.find(
-    (item) => item.id === examSubjectId,
-  );
+  const examSubject = exam?.subjects.find((item) => item.id === examSubjectId);
   const subject =
     path === "STANDALONE"
       ? data.standaloneSubjects.find((item) => item.id === subjectId)
@@ -773,39 +1279,41 @@ function Editor({
             </label>
           ) : null}
         </div>
-        {path === "STANDALONE" ? <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-foreground text-[.63rem] font-bold">
-            Topic
-            <Select
-              className={`${input} mt-1.5`}
-              onChange={(event) => setTopicId(event.target.value)}
-              value={topicId}
-            >
-              <option value="">No topic</option>
-              {subject?.topics.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <label className="text-foreground text-[.63rem] font-bold">
-            Difficulty
-            <Select
-              className={`${input} mt-1.5`}
-              onChange={(event) =>
-                setDifficulty(event.target.value as Difficulty)
-              }
-              value={difficulty}
-            >
-              {["EASY", "MEDIUM", "HARD"].map((item) => (
-                <option key={item} value={item}>
-                  {labels(item)}
-                </option>
-              ))}
-            </Select>
-          </label>
-        </div> : null}
+        {path === "STANDALONE" ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-foreground text-[.63rem] font-bold">
+              Topic
+              <Select
+                className={`${input} mt-1.5`}
+                onChange={(event) => setTopicId(event.target.value)}
+                value={topicId}
+              >
+                <option value="">No topic</option>
+                {subject?.topics.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="text-foreground text-[.63rem] font-bold">
+              Difficulty
+              <Select
+                className={`${input} mt-1.5`}
+                onChange={(event) =>
+                  setDifficulty(event.target.value as Difficulty)
+                }
+                value={difficulty}
+              >
+                {["EASY", "MEDIUM", "HARD"].map((item) => (
+                  <option key={item} value={item}>
+                    {labels(item)}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </div>
+        ) : null}
         <RichContentEditor
           label="Comprehension passage"
           minHeight="min-h-24"
@@ -1093,8 +1601,10 @@ export default function QuestionsPage() {
                           </td>
                           <td className="px-3 py-3 text-[.64rem]">
                             {item.path === "EXAM"
-                              ? item.examSubject?.name ?? item.examSubjectYear?.examSubject.name ?? "Exam subject"
-                              : item.subject?.name ?? "Standalone subject"}
+                              ? (item.examSubject?.name ??
+                                item.examSubjectYear?.examSubject.name ??
+                                "Exam subject")
+                              : (item.subject?.name ?? "Standalone subject")}
                           </td>
                           <td className="px-3 py-3">
                             <StatusBadge tone={tone(item.status)}>
@@ -1140,8 +1650,10 @@ export default function QuestionsPage() {
                         </span>
                         <span className="text-muted-foreground mt-1 block text-[.57rem]">
                           {item.path === "EXAM"
-                            ? item.examSubject?.name ?? item.examSubjectYear?.examSubject.name ?? "Exam subject"
-                            : item.subject?.name ?? "Standalone subject"}
+                            ? (item.examSubject?.name ??
+                              item.examSubjectYear?.examSubject.name ??
+                              "Exam subject")
+                            : (item.subject?.name ?? "Standalone subject")}
                         </span>
                       </span>
                       <StatusBadge tone={tone(item.status)}>
