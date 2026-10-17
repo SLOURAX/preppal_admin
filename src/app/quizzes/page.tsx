@@ -13,7 +13,6 @@ import {
   Plus,
   Search,
   Sparkles,
-  Tags,
   Trash2,
   LoaderCircle,
   X,
