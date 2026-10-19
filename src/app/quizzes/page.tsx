@@ -222,6 +222,156 @@ function Empty({ children, title }: { children: ReactNode; title: string }) {
   );
 }
 
+interface DeleteTarget {
+  type: "exam" | "subject" | "examSubject" | "year" | "topic" | "question";
+  id: string;
+  name: string;
+  parentName?: string;
+}
+
+function ConfirmDeleteModal({
+  target,
+  onClose,
+  onDeleted,
+}: {
+  target: DeleteTarget;
+  onClose: () => void;
+  onDeleted: (message: string) => void;
+}) {
+  const cache = useQueryClient();
+  const getEndpoint = () => {
+    switch (target.type) {
+      case "exam":
+        return `/api/v1/admin/question-bank/exams/${target.id}`;
+      case "examSubject":
+        return `/api/v1/admin/question-bank/exam-subjects/${target.id}`;
+      case "subject":
+        return `/api/v1/admin/question-bank/subjects/${target.id}`;
+      case "year":
+        return `/api/v1/admin/question-bank/exam-subject-years/${target.id}`;
+      case "topic":
+        return `/api/v1/admin/question-bank/topics/${target.id}`;
+      case "question":
+        return `/api/v1/admin/question-bank/questions/${target.id}`;
+    }
+  };
+
+  const getDetails = () => {
+    switch (target.type) {
+      case "exam":
+        return {
+          title: "Delete exam",
+          itemLabel: `exam "${target.name}"`,
+          cascadeNotice:
+            "This will permanently delete this exam and all its subjects, years, topics, and questions.",
+          confirmButton: "Delete exam",
+          successMessage: `Exam "${target.name}" and all its contents were deleted.`,
+        };
+      case "examSubject":
+        return {
+          title: "Delete exam subject",
+          itemLabel: `subject "${target.name}"`,
+          cascadeNotice: `This will permanently delete this exam subject and all its years, topics, and questions. The parent exam "${target.parentName || "Exam"}" will not be affected.`,
+          confirmButton: "Delete subject",
+          successMessage: `Subject "${target.name}" and its questions were deleted.`,
+        };
+      case "subject":
+        return {
+          title: "Delete standalone subject",
+          itemLabel: `subject "${target.name}"`,
+          cascadeNotice:
+            "This will permanently delete this standalone subject and all its topics and questions.",
+          confirmButton: "Delete subject",
+          successMessage: `Subject "${target.name}" and its questions were deleted.`,
+        };
+      case "year":
+        return {
+          title: "Delete exam year",
+          itemLabel: `year ${target.name} for "${target.parentName || "this subject"}"`,
+          cascadeNotice:
+            "This will delete all questions belonging to this year. Other years and the parent subject will not be affected.",
+          confirmButton: "Delete year",
+          successMessage: `Year ${target.name} and its questions were deleted.`,
+        };
+      case "topic":
+        return {
+          title: "Delete topic",
+          itemLabel: `topic "${target.name}"`,
+          cascadeNotice: `This will delete all questions under this topic. The parent subject "${target.parentName || "Subject"}" will not be affected.`,
+          confirmButton: "Delete topic",
+          successMessage: `Topic "${target.name}" and its questions were deleted.`,
+        };
+      case "question":
+        return {
+          title: "Delete question",
+          itemLabel: `question "${target.name}"`,
+          cascadeNotice:
+            "This question will be permanently removed. The subject, topic, and exam will not be affected.",
+          confirmButton: "Delete question",
+          successMessage: `Question "${target.name}" was permanently deleted.`,
+        };
+    }
+  };
+
+  const info = getDetails();
+  const del = useMutation({
+    mutationFn: () => apiClient(getEndpoint(), { method: "DELETE" }),
+    onSuccess: async () => {
+      await cache.invalidateQueries({ queryKey: ["admin", "question-bank"] });
+      onDeleted(info.successMessage);
+      onClose();
+    },
+  });
+
+  return (
+    <Modal onClose={onClose} title={info.title}>
+      <div className="space-y-4">
+        <div className="border-danger/20 bg-danger/5 flex items-start gap-3 rounded-2xl border p-4">
+          <AlertCircle className="text-danger mt-0.5 size-5 shrink-0" />
+          <div className="space-y-1">
+            <p className="text-foreground text-[.74rem] font-bold">
+              Are you sure you want to delete {info.itemLabel}?
+            </p>
+            <p className="text-muted-foreground text-[.64rem] leading-relaxed">
+              {info.cascadeNotice}
+            </p>
+          </div>
+        </div>
+
+        {del.error ? (
+          <p className="bg-danger/10 text-danger rounded-xl p-3 text-[.64rem] font-semibold">
+            {del.error.message}
+          </p>
+        ) : null}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            className={secondary}
+            disabled={del.isPending}
+            onClick={onClose}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className="bg-danger text-white hover:bg-danger/90 inline-flex h-9 items-center justify-center gap-1.5 rounded-xl px-4 text-[.66rem] font-bold transition-colors disabled:opacity-50"
+            disabled={del.isPending}
+            onClick={() => del.mutate()}
+            type="button"
+          >
+            {del.isPending ? (
+              <LoaderCircle className="size-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="size-3.5" />
+            )}
+            {del.isPending ? "Deleting…" : info.confirmButton}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function CreateEntity({
   mode,
   onClose,
@@ -320,6 +470,7 @@ function ExamSetup({
   const [newTopic, setNewTopic] = useState("");
   const [createExam, setCreateExam] = useState(false);
   const [importExamJson, setImportExamJson] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const exam = data.exams.find((item) => item.id === examId) ?? data.exams[0];
   const refresh = async (message: string) => {
     await cache.invalidateQueries({ queryKey: ["admin", "question-bank"] });
@@ -383,18 +534,33 @@ function ExamSetup({
         </div>
         <div className="space-y-1.5">
           {data.exams.map((item) => (
-            <button
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left ${exam?.id === item.id ? "bg-primary/10 text-primary" : "hover:bg-surface-subtle"}`}
+            <div
+              className={`group flex items-center justify-between gap-1 rounded-xl pr-1.5 transition-colors ${exam?.id === item.id ? "bg-primary/10 text-primary" : "hover:bg-surface-subtle"}`}
               key={item.id}
-              onClick={() => setExamId(item.id)}
-              type="button"
             >
-              <BookOpen className="size-4" />
-              <span className="flex-1 text-[.7rem] font-bold">{item.name}</span>
-              <span className="text-muted-foreground text-[.58rem]">
-                {item.subjects.length}
-              </span>
-            </button>
+              <button
+                className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2.5 text-left"
+                onClick={() => setExamId(item.id)}
+                type="button"
+              >
+                <BookOpen className="size-4 shrink-0" />
+                <span className="truncate text-[.7rem] font-bold">{item.name}</span>
+                <span className="text-muted-foreground ml-auto pr-1 text-[.58rem]">
+                  {item.subjects.length}
+                </span>
+              </button>
+              <button
+                className="text-muted-foreground hover:text-danger hover:bg-danger/10 rounded-lg p-1.5 opacity-60 transition-colors hover:opacity-100"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDeleteTarget({ type: "exam", id: item.id, name: item.name });
+                }}
+                title={`Delete exam ${item.name}`}
+                type="button"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
           ))}
           {!data.exams.length ? (
             <Empty title="No exams">
@@ -458,9 +624,26 @@ function ExamSetup({
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <h3 className="text-foreground text-[.73rem] font-bold">
-                        {entry.name}
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-foreground text-[.73rem] font-bold">
+                          {entry.name}
+                        </h3>
+                        <button
+                          className="text-muted-foreground hover:text-danger hover:bg-danger/10 rounded-lg p-1 transition-colors"
+                          onClick={() =>
+                            setDeleteTarget({
+                              type: "examSubject",
+                              id: entry.id,
+                              name: entry.name,
+                              parentName: exam.name,
+                            })
+                          }
+                          title={`Delete subject ${entry.name}`}
+                          type="button"
+                        >
+                          <Trash2 className="size-3" />
+                        </button>
+                      </div>
                       <p className="text-muted-foreground mt-1 text-[.58rem]">
                         {entry._count.questions} questions ·{" "}
                         {(entry.topics ?? []).length} topics
@@ -469,10 +652,25 @@ function ExamSetup({
                     <div className="flex flex-wrap gap-1.5">
                       {entry.years.map((item) => (
                         <span
-                          className="bg-primary/8 text-primary rounded-full px-2.5 py-1 text-[.58rem] font-bold"
+                          className="bg-primary/8 text-primary inline-flex items-center gap-1 rounded-full py-0.5 pr-1.5 pl-2.5 text-[.58rem] font-bold"
                           key={item.id}
                         >
-                          {item.examYear.year}
+                          <span>{item.examYear.year}</span>
+                          <button
+                            className="hover:text-danger hover:bg-danger/10 rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100"
+                            onClick={() =>
+                              setDeleteTarget({
+                                type: "year",
+                                id: item.id,
+                                name: `${item.examYear.year}`,
+                                parentName: entry.name,
+                              })
+                            }
+                            title={`Delete year ${item.examYear.year}`}
+                            type="button"
+                          >
+                            <X className="size-2.5" />
+                          </button>
                         </span>
                       ))}
                       {!entry.years.length ? (
@@ -486,10 +684,25 @@ function ExamSetup({
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {(entry.topics ?? []).map((topic) => (
                         <span
-                          className="bg-surface-subtle text-foreground rounded-full px-2.5 py-1 text-[.56rem]"
+                          className="bg-surface-subtle text-foreground inline-flex items-center gap-1 rounded-full py-0.5 pr-1.5 pl-2.5 text-[.56rem]"
                           key={topic.id}
                         >
-                          {topic.name}
+                          <span>{topic.name}</span>
+                          <button
+                            className="hover:text-danger hover:bg-danger/10 rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100"
+                            onClick={() =>
+                              setDeleteTarget({
+                                type: "topic",
+                                id: topic.id,
+                                name: topic.name,
+                                parentName: entry.name,
+                              })
+                            }
+                            title={`Delete topic ${topic.name}`}
+                            type="button"
+                          >
+                            <X className="size-2.5" />
+                          </button>
                         </span>
                       ))}
                     </div>
@@ -576,6 +789,18 @@ function ExamSetup({
             setImportExamJson(false);
             await refresh(message);
           }}
+        />
+      ) : null}
+      {deleteTarget ? (
+        <ConfirmDeleteModal
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={async (message) => {
+            if (deleteTarget.type === "exam" && deleteTarget.id === examId) {
+              setExamId("");
+            }
+            await refresh(message);
+          }}
+          target={deleteTarget}
         />
       ) : null}
     </div>
@@ -724,6 +949,7 @@ function Standalone({
   >(null);
   const [owner, setOwner] = useState("");
   const [topic, setTopic] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const add = useMutation({
     mutationFn: () =>
       apiClient(`/api/v1/admin/question-bank/subjects/${owner}/topics`, {
@@ -768,9 +994,25 @@ function Standalone({
             className="border-border rounded-2xl border p-4"
             key={subject.id}
           >
-            <span className="bg-primary/10 text-primary grid size-9 place-items-center rounded-xl">
-              <Layers3 className="size-4" />
-            </span>
+            <div className="flex items-start justify-between gap-2">
+              <span className="bg-primary/10 text-primary grid size-9 shrink-0 place-items-center rounded-xl">
+                <Layers3 className="size-4" />
+              </span>
+              <button
+                className="text-muted-foreground hover:text-danger hover:bg-danger/10 rounded-lg p-1.5 transition-colors"
+                onClick={() =>
+                  setDeleteTarget({
+                    type: "subject",
+                    id: subject.id,
+                    name: subject.name,
+                  })
+                }
+                title={`Delete subject ${subject.name}`}
+                type="button"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
             <h3 className="text-foreground mt-3 text-[.77rem] font-bold">
               {subject.name}
             </h3>
@@ -781,10 +1023,25 @@ function Standalone({
             <div className="mt-3 flex flex-wrap gap-1.5">
               {subject.topics.map((item) => (
                 <span
-                  className="bg-surface-subtle rounded-full px-2.5 py-1 text-[.56rem]"
+                  className="bg-surface-subtle text-foreground inline-flex items-center gap-1 rounded-full py-0.5 pr-1.5 pl-2.5 text-[.56rem]"
                   key={item.id}
                 >
-                  {item.name}
+                  <span>{item.name}</span>
+                  <button
+                    className="hover:text-danger hover:bg-danger/10 rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100"
+                    onClick={() =>
+                      setDeleteTarget({
+                        type: "topic",
+                        id: item.id,
+                        name: item.name,
+                        parentName: subject.name,
+                      })
+                    }
+                    title={`Delete topic ${item.name}`}
+                    type="button"
+                  >
+                    <X className="size-2.5" />
+                  </button>
                 </span>
               ))}
             </div>
@@ -848,9 +1105,20 @@ function Standalone({
           }}
         />
       ) : null}
+      {deleteTarget ? (
+        <ConfirmDeleteModal
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={async (message) => {
+            await cache.invalidateQueries({ queryKey: ["admin", "question-bank"] });
+            notify(message);
+          }}
+          target={deleteTarget}
+        />
+      ) : null}
     </SectionCard>
   );
 }
+
 
 function MagicStandaloneCreator({
   data,
@@ -1654,6 +1922,7 @@ export default function QuestionsPage() {
   const [page, setPage] = useState(1);
   const [editor, setEditor] = useState<Question | "new" | null>(null);
   const [preview, setPreview] = useState<Question | null>(null);
+  const [deleteQuestion, setDeleteQuestion] = useState<Question | null>(null);
   const [notice, setNotice] = useState("");
   const params = new URLSearchParams({ page: String(page), pageSize: "12" });
   if (search.trim()) params.set("search", search.trim());
@@ -1857,6 +2126,14 @@ export default function QuestionsPage() {
                             >
                               <Pencil className="size-3.5" />
                             </button>
+                            <button
+                              className="text-muted-foreground hover:text-danger p-2 transition-colors"
+                              onClick={() => setDeleteQuestion(item)}
+                              title="Delete question"
+                              type="button"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -2002,6 +2279,20 @@ export default function QuestionsPage() {
             />
           ) : null}
         </Modal>
+      ) : null}
+      {deleteQuestion ? (
+        <ConfirmDeleteModal
+          onClose={() => setDeleteQuestion(null)}
+          onDeleted={(message) => {
+            setDeleteQuestion(null);
+            notify(message);
+          }}
+          target={{
+            type: "question",
+            id: deleteQuestion.id,
+            name: plainText(deleteQuestion.prompt).slice(0, 60),
+          }}
+        />
       ) : null}
     </AdminShell>
   );
