@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   AlertCircle,
   BookOpen,
@@ -17,7 +22,7 @@ import {
   LoaderCircle,
   X,
 } from "lucide-react";
-import { FormEvent, ReactNode, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -1957,7 +1962,8 @@ function Editor({
 
 export default function QuestionsPage() {
   const [tab, setTab] = useState<Tab>("questions");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [exam, setExam] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
@@ -1965,14 +1971,24 @@ export default function QuestionsPage() {
   const [preview, setPreview] = useState<Question | null>(null);
   const [deleteQuestion, setDeleteQuestion] = useState<Question | null>(null);
   const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput.trim());
+      setPage(1);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   const params = new URLSearchParams({ page: String(page), pageSize: "12" });
-  if (search.trim()) params.set("search", search.trim());
+  if (debouncedSearch) params.set("search", debouncedSearch);
   if (exam) params.set("examId", exam);
   if (status) params.set("status", status);
   const query = useQuery({
-    queryKey: ["admin", "question-bank", page, search, exam, status],
+    queryKey: ["admin", "question-bank", page, debouncedSearch, exam, status],
     queryFn: () =>
       apiClient<Workspace>(`/api/v1/admin/question-bank?${params}`),
+    placeholderData: keepPreviousData,
   });
   const data = query.data;
   const notify = (message: string) => {
@@ -2002,7 +2018,7 @@ export default function QuestionsPage() {
             {notice}
           </div>
         ) : null}
-        {query.isLoading ? (
+        {!data && query.isLoading ? (
           <div className="surface-card grid min-h-64 place-items-center text-[.7rem]">
             Loading question bank…
           </div>
@@ -2067,17 +2083,32 @@ export default function QuestionsPage() {
               >
                 <div className="border-border mb-4 grid gap-2 border-y py-3 sm:grid-cols-2 lg:grid-cols-[1fr_190px_170px]">
                   <label className="relative">
-                    <Search className="text-muted-foreground absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
+                    {query.isFetching && debouncedSearch ? (
+                      <LoaderCircle className="text-muted-foreground absolute top-1/2 left-3 size-3.5 -translate-y-1/2 animate-spin" />
+                    ) : (
+                      <Search className="text-muted-foreground absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
+                    )}
                     <input
                       autoComplete="off"
-                      className={`${input} pl-9`}
-                      onChange={(event) => {
-                        setSearch(event.target.value);
-                        setPage(1);
-                      }}
+                      className={`${input} pl-9 ${searchInput ? "pr-8" : ""}`}
+                      onChange={(event) => setSearchInput(event.target.value)}
                       placeholder="Search question or reference"
-                      value={search}
+                      value={searchInput}
                     />
+                    {searchInput ? (
+                      <button
+                        className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2.5 -translate-y-1/2 p-0.5"
+                        onClick={() => {
+                          setSearchInput("");
+                          setDebouncedSearch("");
+                          setPage(1);
+                        }}
+                        title="Clear search"
+                        type="button"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    ) : null}
                   </label>
                   <Select
                     className={input}
