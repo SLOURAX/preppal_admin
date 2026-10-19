@@ -1806,66 +1806,107 @@ function Editor({
           placeholder="Write the question. Use the toolbar for symbols, formulas, calculations, tables, images, or diagrams."
           value={prompt}
         />
-        <div className="grid gap-2 sm:grid-cols-2">
-          {options.map((option, index) => (
-            <div
-              className={`rounded-xl border p-2.5 transition-colors ${option.isCorrect ? "border-success/50 bg-success/5" : "border-border bg-surface"}`}
-              key={option.label}
-            >
-              <div className="text-foreground flex items-center justify-between text-[.61rem] font-bold">
-                <label className="flex cursor-pointer items-center gap-2 select-none">
-                  <input
-                    checked={option.isCorrect}
-                    className="cursor-pointer"
-                    name="correct"
-                    onChange={() =>
+        <div className="space-y-2">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {options.map((option, index) => (
+              <div
+                className={`rounded-xl border p-2.5 transition-colors ${option.isCorrect ? "border-success/50 bg-success/5" : "border-border bg-surface"}`}
+                key={option.label}
+              >
+                <div className="text-foreground flex items-center justify-between text-[.61rem] font-bold">
+                  <label className="flex cursor-pointer items-center gap-2 select-none">
+                    <input
+                      checked={option.isCorrect}
+                      className="cursor-pointer"
+                      name="correct"
+                      onChange={() =>
+                        setOptions((current) =>
+                          current.map((item, itemIndex) => ({
+                            ...item,
+                            isCorrect: itemIndex === index,
+                          })),
+                        )
+                      }
+                      type="radio"
+                    />
+                    <span>Option {option.label}</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {option.isCorrect ? (
+                      <span className="text-success font-semibold">Correct</span>
+                    ) : (
+                      <button
+                        className="text-muted-foreground hover:text-foreground text-[.58rem] font-normal transition-colors"
+                        onClick={() =>
+                          setOptions((current) =>
+                            current.map((item, itemIndex) => ({
+                              ...item,
+                              isCorrect: itemIndex === index,
+                            })),
+                          )
+                        }
+                        type="button"
+                      >
+                        Set as correct
+                      </button>
+                    )}
+                    {options.length > 2 && !option.isCorrect ? (
+                      <button
+                        className="text-muted-foreground hover:text-danger ml-1 rounded-md p-0.5 transition-colors"
+                        onClick={() =>
+                          setOptions((current) => {
+                            const next = current.filter((_, i) => i !== index);
+                            // Re-label A, B, C…
+                            return next.map((item, i) => ({
+                              ...item,
+                              label: String.fromCharCode(65 + i),
+                            }));
+                          })
+                        }
+                        title="Remove option"
+                        type="button"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <RichContentEditor
+                    label={`Option ${option.label}`}
+                    minHeight="min-h-16"
+                    onChange={(value) =>
                       setOptions((current) =>
-                        current.map((item, itemIndex) => ({
-                          ...item,
-                          isCorrect: itemIndex === index,
-                        })),
+                        current.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, text: value } : item,
+                        ),
                       )
                     }
-                    type="radio"
+                    placeholder={`Enter option ${option.label}`}
+                    value={option.text}
                   />
-                  <span>Option {option.label}</span>
-                </label>
-                {option.isCorrect ? (
-                  <span className="text-success font-semibold">Correct</span>
-                ) : (
-                  <button
-                    className="text-muted-foreground hover:text-foreground text-[.58rem] font-normal transition-colors"
-                    onClick={() =>
-                      setOptions((current) =>
-                        current.map((item, itemIndex) => ({
-                          ...item,
-                          isCorrect: itemIndex === index,
-                        })),
-                      )
-                    }
-                    type="button"
-                  >
-                    Set as correct
-                  </button>
-                )}
+                </div>
               </div>
-              <div className="mt-2">
-                <RichContentEditor
-                  label={`Option ${option.label}`}
-                  minHeight="min-h-16"
-                  onChange={(value) =>
-                    setOptions((current) =>
-                      current.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, text: value } : item,
-                      ),
-                    )
-                  }
-                  placeholder={`Enter option ${option.label}`}
-                  value={option.text}
-                />
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
+          {options.length < 8 ? (
+            <button
+              className={`${secondary} w-full`}
+              onClick={() =>
+                setOptions((current) => [
+                  ...current,
+                  {
+                    label: String.fromCharCode(65 + current.length),
+                    text: "",
+                    isCorrect: false,
+                  },
+                ])
+              }
+              type="button"
+            >
+              <Plus className="size-3.5" /> Add option
+            </button>
+          ) : null}
         </div>
         <div>
           <span className="text-foreground mb-1.5 block text-[.63rem] font-bold">
@@ -2028,6 +2069,7 @@ export default function QuestionsPage() {
                   <label className="relative">
                     <Search className="text-muted-foreground absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
                     <input
+                      autoComplete="off"
                       className={`${input} pl-9`}
                       onChange={(event) => {
                         setSearch(event.target.value);
