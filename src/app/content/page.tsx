@@ -1376,10 +1376,15 @@ function DiscussionsPanel({
                     </ModerateButton>
                     <ModerateButton
                       onClick={() =>
-                        moderate.mutate({ id: comment.id, status: "HIDDEN" })
+                        moderate.mutate({
+                          id: comment.id,
+                          status:
+                            comment.status === "HIDDEN" ? "APPROVED" : "HIDDEN",
+                        })
                       }
                     >
-                      <Eye className="size-3.5" /> Hide
+                      <Eye className="size-3.5" />
+                      {comment.status === "HIDDEN" ? "Unhide" : "Hide"}
                     </ModerateButton>
                     <button
                       aria-label="Delete comment"

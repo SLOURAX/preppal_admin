@@ -22,6 +22,7 @@ import { Pagination } from "@/components/admin-ui";
 import { AdminShell } from "@/components/layout";
 import { Select } from "@/components/ui";
 import { apiClient } from "@/lib/api/client";
+import { ExportCsvButton } from "@/components/export-csv-button";
 
 type UserStatus = "Active" | "Suspended" | "Pending";
 type StatusFilter = "ALL" | "ACTIVE" | "PENDING" | "SUSPENDED";
@@ -176,14 +177,21 @@ export default function UsersPage() {
   });
   const accountAction = useMutation({
     mutationFn: ({ id, body }: { id: string; body: Record<string, string> }) =>
-      apiClient(`/api/v1/admin/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+      apiClient(`/api/v1/admin/users/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
       setSelectedUser(null);
     },
   });
   const revokeSessions = useMutation({
-    mutationFn: (id: string) => apiClient(`/api/v1/admin/users/${id}/revoke-sessions`, { method: "POST", body: JSON.stringify({ reason: "Revoked by administrator" }) }),
+    mutationFn: (id: string) =>
+      apiClient(`/api/v1/admin/users/${id}/revoke-sessions`, {
+        method: "POST",
+        body: JSON.stringify({ reason: "Revoked by administrator" }),
+      }),
   });
   const data = query.data;
   const users = data?.users ?? [];
@@ -251,9 +259,24 @@ export default function UsersPage() {
               </div>
             </div>
           </div>
-          <span className="bg-success/10 text-success rounded-full px-3 py-1.5 text-xs font-semibold">
-            Live directory
-          </span>
+          <ExportCsvButton
+            filename={`preppal-users-${new Date().toISOString().slice(0, 10)}`}
+            rows={users.map((user) => ({
+              Name: user.name,
+              Email: user.email,
+              Phone: user.phone,
+              Role: user.role,
+              Status: user.status,
+              Plan: user.plan,
+              Level: `${user.level.number} - ${user.level.name}`,
+              XP: user.xp,
+              "Lifetime XP": user.lifetimeXp,
+              Coins: user.coins,
+              Quizzes: user.quizzes,
+              "Last active": user.lastActive,
+              "Joined at": user.joinedAt,
+            }))}
+          />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -559,10 +582,91 @@ export default function UsersPage() {
               <div className="bg-surface-subtle mt-6 flex flex-wrap items-center gap-2 rounded-2xl p-4">
                 <RoleBadge role={selectedUser.role} />
                 <StatusBadge status={selectedUser.status} />
-                {selectedUser.role === "LEARNER" ? <><span className="border-border rounded-full border bg-background px-3 py-1 text-xs font-semibold">{selectedUser.plan}</span><span className="border-border rounded-full border bg-background px-3 py-1 text-xs font-semibold">Level {selectedUser.level.number} · {selectedUser.level.name}</span></> : <span className="text-muted-foreground px-1 text-xs">Staff account</span>}
+                {selectedUser.role === "LEARNER" ? (
+                  <>
+                    <span className="border-border bg-background rounded-full border px-3 py-1 text-xs font-semibold">
+                      {selectedUser.plan}
+                    </span>
+                    <span className="border-border bg-background rounded-full border px-3 py-1 text-xs font-semibold">
+                      Level {selectedUser.level.number} ·{" "}
+                      {selectedUser.level.name}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground px-1 text-xs">
+                    Staff account
+                  </span>
+                )}
               </div>
 
-              {selectedUser.role === "LEARNER" ? <section className="mt-6"><div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-bold">Learning snapshot</h3><span className="text-muted-foreground text-xs">{selectedUser.weeklyGoalDays ? `${selectedUser.weeklyGoalDays}-day weekly goal` : "No weekly goal set"}</span></div><dl className="divide-border overflow-hidden rounded-2xl border"><div className="grid grid-cols-2 divide-x sm:grid-cols-4"><div className="p-4"><dt className="text-muted-foreground text-xs">Available XP</dt><dd className="mt-1 text-lg font-bold">{number(selectedUser.xp)}</dd></div><div className="p-4"><dt className="text-muted-foreground text-xs">Coins</dt><dd className="mt-1 text-lg font-bold">{number(selectedUser.coins)}</dd></div><div className="p-4"><dt className="text-muted-foreground text-xs">Quizzes completed</dt><dd className="mt-1 text-lg font-bold">{number(selectedUser.quizzes)}</dd></div><div className="p-4"><dt className="text-muted-foreground text-xs">Check-ins</dt><dd className="mt-1 text-lg font-bold">{number(selectedUser.checkIns)}</dd></div></div><div className="bg-surface-subtle flex flex-wrap gap-x-6 gap-y-2 px-4 py-3 text-xs"><span>Lifetime XP <strong className="ml-1">{number(selectedUser.lifetimeXp)}</strong></span><span>Referrals <strong className="ml-1">{number(selectedUser.verifiedReferrals)}</strong></span><span>Onboarding <strong className="ml-1">{selectedUser.onboardingCompleted ? "Complete" : "Incomplete"}</strong></span></div></dl></section> : null}
+              {selectedUser.role === "LEARNER" ? (
+                <section className="mt-6">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-sm font-bold">Learning snapshot</h3>
+                    <span className="text-muted-foreground text-xs">
+                      {selectedUser.weeklyGoalDays
+                        ? `${selectedUser.weeklyGoalDays}-day weekly goal`
+                        : "No weekly goal set"}
+                    </span>
+                  </div>
+                  <dl className="divide-border overflow-hidden rounded-2xl border">
+                    <div className="grid grid-cols-2 divide-x sm:grid-cols-4">
+                      <div className="p-4">
+                        <dt className="text-muted-foreground text-xs">
+                          Available XP
+                        </dt>
+                        <dd className="mt-1 text-lg font-bold">
+                          {number(selectedUser.xp)}
+                        </dd>
+                      </div>
+                      <div className="p-4">
+                        <dt className="text-muted-foreground text-xs">Coins</dt>
+                        <dd className="mt-1 text-lg font-bold">
+                          {number(selectedUser.coins)}
+                        </dd>
+                      </div>
+                      <div className="p-4">
+                        <dt className="text-muted-foreground text-xs">
+                          Quizzes completed
+                        </dt>
+                        <dd className="mt-1 text-lg font-bold">
+                          {number(selectedUser.quizzes)}
+                        </dd>
+                      </div>
+                      <div className="p-4">
+                        <dt className="text-muted-foreground text-xs">
+                          Check-ins
+                        </dt>
+                        <dd className="mt-1 text-lg font-bold">
+                          {number(selectedUser.checkIns)}
+                        </dd>
+                      </div>
+                    </div>
+                    <div className="bg-surface-subtle flex flex-wrap gap-x-6 gap-y-2 px-4 py-3 text-xs">
+                      <span>
+                        Lifetime XP{" "}
+                        <strong className="ml-1">
+                          {number(selectedUser.lifetimeXp)}
+                        </strong>
+                      </span>
+                      <span>
+                        Referrals{" "}
+                        <strong className="ml-1">
+                          {number(selectedUser.verifiedReferrals)}
+                        </strong>
+                      </span>
+                      <span>
+                        Onboarding{" "}
+                        <strong className="ml-1">
+                          {selectedUser.onboardingCompleted
+                            ? "Complete"
+                            : "Incomplete"}
+                        </strong>
+                      </span>
+                    </div>
+                  </dl>
+                </section>
+              ) : null}
 
               <div className="border-border mt-5 grid gap-4 border-t pt-5 sm:grid-cols-2">
                 <div className="flex items-start gap-2.5">
@@ -589,17 +693,19 @@ export default function UsersPage() {
                     </p>
                   </div>
                 </div>
-                {selectedUser.role === "LEARNER" ? <div className="flex items-start gap-2.5">
-                  <Target className="text-primary mt-0.5 size-4" />
-                  <div>
-                    <p className="text-muted-foreground text-[10px]">
-                      Primary exam goal
-                    </p>
-                    <p className="text-foreground mt-1 text-xs font-medium">
-                      {selectedUser.primaryExamGoal ?? "Not set"}
-                    </p>
+                {selectedUser.role === "LEARNER" ? (
+                  <div className="flex items-start gap-2.5">
+                    <Target className="text-primary mt-0.5 size-4" />
+                    <div>
+                      <p className="text-muted-foreground text-[10px]">
+                        Primary exam goal
+                      </p>
+                      <p className="text-foreground mt-1 text-xs font-medium">
+                        {selectedUser.primaryExamGoal ?? "Not set"}
+                      </p>
+                    </div>
                   </div>
-                </div> : null}
+                ) : null}
                 <div className="flex items-start gap-2.5">
                   <CalendarDays className="text-primary mt-0.5 size-4" />
                   <div>
@@ -619,13 +725,71 @@ export default function UsersPage() {
               </div>
 
               <div className="border-border mt-5 border-t pt-4">
-                <p className="text-muted-foreground text-[10px] font-bold tracking-wide uppercase">Account controls</p>
+                <p className="text-muted-foreground text-[10px] font-bold tracking-wide uppercase">
+                  Account controls
+                </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button className="border-border hover:bg-surface-subtle rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-50" disabled={accountAction.isPending} onClick={() => accountAction.mutate({ id: selectedUser.id, body: { status: selectedUser.status === "Suspended" ? "ACTIVE" : "SUSPENDED", reason: selectedUser.status === "Suspended" ? "Restored by administrator" : "Suspended by administrator" } })} type="button">{selectedUser.status === "Suspended" ? "Restore account" : "Suspend account"}</button>
-                  <Select aria-label="Change user role" className="border-border bg-background h-9 rounded-lg border px-2 text-xs" disabled={accountAction.isPending} onChange={(event) => { if (event.target.value !== selectedUser.role) accountAction.mutate({ id: selectedUser.id, body: { role: event.target.value, reason: "Role updated by administrator" } }); }} value={selectedUser.role}><option value="LEARNER">Learner</option><option value="MODERATOR">Moderator</option><option value="ADMIN">Administrator</option></Select>
-                  <button className="border-border hover:bg-surface-subtle rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-50" disabled={revokeSessions.isPending} onClick={() => revokeSessions.mutate(selectedUser.id)} type="button">{revokeSessions.isPending ? "Revoking sessions…" : "Revoke sessions"}</button>
+                  <button
+                    className="border-border hover:bg-surface-subtle rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                    disabled={accountAction.isPending}
+                    onClick={() =>
+                      accountAction.mutate({
+                        id: selectedUser.id,
+                        body: {
+                          status:
+                            selectedUser.status === "Suspended"
+                              ? "ACTIVE"
+                              : "SUSPENDED",
+                          reason:
+                            selectedUser.status === "Suspended"
+                              ? "Restored by administrator"
+                              : "Suspended by administrator",
+                        },
+                      })
+                    }
+                    type="button"
+                  >
+                    {selectedUser.status === "Suspended"
+                      ? "Restore account"
+                      : "Suspend account"}
+                  </button>
+                  <Select
+                    aria-label="Change user role"
+                    className="border-border bg-background h-9 rounded-lg border px-2 text-xs"
+                    disabled={accountAction.isPending}
+                    onChange={(event) => {
+                      if (event.target.value !== selectedUser.role)
+                        accountAction.mutate({
+                          id: selectedUser.id,
+                          body: {
+                            role: event.target.value,
+                            reason: "Role updated by administrator",
+                          },
+                        });
+                    }}
+                    value={selectedUser.role}
+                  >
+                    <option value="LEARNER">Learner</option>
+                    <option value="MODERATOR">Moderator</option>
+                    <option value="ADMIN">Administrator</option>
+                  </Select>
+                  <button
+                    className="border-border hover:bg-surface-subtle rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                    disabled={revokeSessions.isPending}
+                    onClick={() => revokeSessions.mutate(selectedUser.id)}
+                    type="button"
+                  >
+                    {revokeSessions.isPending
+                      ? "Revoking sessions…"
+                      : "Revoke sessions"}
+                  </button>
                 </div>
-                {accountAction.isError || revokeSessions.isError ? <p className="mt-2 text-xs text-destructive">The account action could not be completed. Refresh and try again.</p> : null}
+                {accountAction.isError || revokeSessions.isError ? (
+                  <p className="text-destructive mt-2 text-xs">
+                    The account action could not be completed. Refresh and try
+                    again.
+                  </p>
+                ) : null}
               </div>
 
               <button

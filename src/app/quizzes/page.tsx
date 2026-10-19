@@ -67,6 +67,7 @@ interface ExamSubject {
   description?: string;
   active: boolean;
   years: ExamSubjectYear[];
+  topics: Topic[];
   _count: { questions: number };
 }
 interface Exam {
@@ -315,7 +316,10 @@ function ExamSetup({
   const [newSubject, setNewSubject] = useState("");
   const [year, setYear] = useState(new Date().getFullYear());
   const [yearOwner, setYearOwner] = useState("");
+  const [topicOwner, setTopicOwner] = useState("");
+  const [newTopic, setNewTopic] = useState("");
   const [createExam, setCreateExam] = useState(false);
+  const [importExamJson, setImportExamJson] = useState(false);
   const exam = data.exams.find((item) => item.id === examId) ?? data.exams[0];
   const refresh = async (message: string) => {
     await cache.invalidateQueries({ queryKey: ["admin", "question-bank"] });
@@ -340,21 +344,43 @@ function ExamSetup({
       ),
     onSuccess: () => refresh("Exam year added."),
   });
+  const addTopic = useMutation({
+    mutationFn: () =>
+      apiClient(
+        `/api/v1/admin/question-bank/exam-subjects/${topicOwner}/topics`,
+        {
+          method: "POST",
+          body: JSON.stringify({ name: newTopic.trim() }),
+        },
+      ),
+    onSuccess: async () => {
+      setNewTopic("");
+      await refresh("Exam topic added.");
+    },
+  });
   return (
-    <div className="grid gap-4 xl:grid-cols-[270px_minmax(0,1fr)]">
+    <div className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
       <SectionCard
-        actions={
-          <button
-            className="text-primary text-[.62rem] font-bold"
-            onClick={() => setCreateExam(true)}
-            type="button"
-          >
-            + New
-          </button>
-        }
+        className="min-w-0"
         description="Select an exam to configure."
         title="Exams"
       >
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          <button
+            className="border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-xl border px-2.5 text-[.62rem] font-bold whitespace-nowrap transition-colors"
+            onClick={() => setImportExamJson(true)}
+            type="button"
+          >
+            <Sparkles className="size-3.5 shrink-0" /> Import JSON
+          </button>
+          <button
+            className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2.5 text-[.62rem] font-bold whitespace-nowrap transition-colors"
+            onClick={() => setCreateExam(true)}
+            type="button"
+          >
+            <Plus className="size-3.5 shrink-0" /> New exam
+          </button>
+        </div>
         <div className="space-y-1.5">
           {data.exams.map((item) => (
             <button
@@ -421,8 +447,8 @@ function ExamSetup({
             </div>
           </SectionCard>
           <SectionCard
-            description="Each exam subject has its own available years. Topics are only used by standalone subjects."
-            title="Exam subjects and years"
+            description="Configure the years and optional topics available for each exam subject."
+            title="Exam subjects, years and topics"
           >
             <div className="space-y-3">
               {exam.subjects.map((entry) => (
@@ -436,7 +462,8 @@ function ExamSetup({
                         {entry.name}
                       </h3>
                       <p className="text-muted-foreground mt-1 text-[.58rem]">
-                        {entry._count.questions} questions
+                        {entry._count.questions} questions ·{" "}
+                        {(entry.topics ?? []).length} topics
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
@@ -455,6 +482,18 @@ function ExamSetup({
                       ) : null}
                     </div>
                   </div>
+                  {(entry.topics ?? []).length ? (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {(entry.topics ?? []).map((topic) => (
+                        <span
+                          className="bg-surface-subtle text-foreground rounded-full px-2.5 py-1 text-[.56rem]"
+                          key={topic.id}
+                        >
+                          {topic.name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                   <div className="border-border mt-3 grid gap-2 border-t pt-3 sm:grid-cols-[130px_auto] sm:justify-end">
                     <input
                       className={input}
@@ -481,6 +520,34 @@ function ExamSetup({
                       </button>
                     </div>
                   </div>
+                  <form
+                    className="border-border mt-3 flex gap-2 border-t pt-3"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      addTopic.mutate();
+                    }}
+                  >
+                    <input
+                      className={input}
+                      onChange={(event) => {
+                        setTopicOwner(entry.id);
+                        setNewTopic(event.target.value);
+                      }}
+                      placeholder="Add an exam topic"
+                      value={topicOwner === entry.id ? newTopic : ""}
+                    />
+                    <button
+                      className={secondary}
+                      disabled={
+                        topicOwner !== entry.id ||
+                        !newTopic.trim() ||
+                        addTopic.isPending
+                      }
+                      type="submit"
+                    >
+                      <Plus className="size-3.5" /> Topic
+                    </button>
+                  </form>
                 </article>
               ))}
               {!exam.subjects.length ? (
@@ -502,7 +569,144 @@ function ExamSetup({
           }}
         />
       ) : null}
+      {importExamJson ? (
+        <ExamJsonImporter
+          onClose={() => setImportExamJson(false)}
+          onDone={async (message) => {
+            setImportExamJson(false);
+            await refresh(message);
+          }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+const EXAM_IMPORT_EXAMPLE = JSON.stringify(
+  {
+    exam: "JAMB UTME",
+    examDescription: "Joint Admissions and Matriculation Board examination",
+    subject: "Mathematics",
+    subjectDescription: "Mathematics for the selected examination",
+    year: 2025,
+    status: "DRAFT",
+    questions: [
+      {
+        topic: "Algebra",
+        prompt: "Solve 2x + 4 = 10.",
+        passage: "",
+        explanation: "Subtract 4, then divide by 2.",
+        difficulty: "EASY",
+        options: ["2", "3", "4", "5"],
+        correctAnswer: "B",
+      },
+    ],
+  },
+  null,
+  2,
+);
+
+function ExamJsonImporter({
+  onClose,
+  onDone,
+}: {
+  onClose: () => void;
+  onDone: (message: string) => void | Promise<void>;
+}) {
+  const [json, setJson] = useState(EXAM_IMPORT_EXAMPLE);
+  const [parseError, setParseError] = useState("");
+  const importer = useMutation({
+    mutationFn: async () => {
+      let payload: unknown;
+      try {
+        payload = JSON.parse(json);
+      } catch {
+        throw new Error(
+          "The JSON is not valid. Check commas, quotes, and brackets.",
+        );
+      }
+      return apiClient<{
+        created: number;
+        exam: { name: string };
+        subject: { name: string };
+        year: number;
+        topics: number;
+      }>("/api/v1/admin/question-bank/questions/exam-json-import", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    },
+    onSuccess: (result) =>
+      onDone(
+        `${result.created} questions imported into ${result.exam.name} ${result.subject.name} (${result.year}) across ${result.topics} topic${result.topics === 1 ? "" : "s"}.`,
+      ),
+  });
+
+  return (
+    <Modal onClose={onClose} title="Magic exam JSON importer" wide>
+      <div className="space-y-4">
+        <div className="border-primary/20 bg-primary/5 rounded-2xl border p-4">
+          <p className="text-foreground text-[.72rem] font-bold">
+            One JSON document creates or reuses the full hierarchy
+          </p>
+          <p className="text-muted-foreground mt-1 text-[.62rem] leading-5">
+            Required top-level keys: <strong>exam</strong>,{" "}
+            <strong>subject</strong>, <strong>year</strong>,{" "}
+            <strong>status</strong>, and <strong>questions</strong>. Every
+            question requires <strong>topic</strong>, <strong>prompt</strong>,{" "}
+            <strong>difficulty</strong>, <strong>options</strong>, and{" "}
+            <strong>correctAnswer</strong>. correctAnswer is the option letter
+            A–F. Use DRAFT while reviewing; use PUBLISHED only for approved
+            content.
+          </p>
+        </div>
+        <label className="text-foreground block text-[.63rem] font-bold">
+          Exam question JSON
+          <textarea
+            className="border-border focus:border-primary mt-1.5 min-h-[28rem] w-full rounded-2xl border bg-[#151126] p-4 font-mono text-[.65rem] leading-5 text-violet-50 outline-none"
+            onChange={(event) => {
+              setJson(event.target.value);
+              setParseError("");
+            }}
+            spellCheck={false}
+            value={json}
+          />
+        </label>
+        {parseError || importer.error ? (
+          <p className="bg-danger/10 text-danger rounded-xl p-3 text-[.65rem] font-semibold">
+            {parseError || importer.error?.message}
+          </p>
+        ) : null}
+        <div className="flex flex-wrap justify-end gap-2">
+          <button className={secondary} onClick={onClose} type="button">
+            Cancel
+          </button>
+          <button
+            className={primary}
+            disabled={!json.trim() || importer.isPending}
+            onClick={() => {
+              try {
+                JSON.parse(json);
+                setParseError("");
+                importer.mutate();
+              } catch {
+                setParseError(
+                  "The JSON is not valid. Check commas, quotes, and brackets.",
+                );
+              }
+            }}
+            type="button"
+          >
+            {importer.isPending ? (
+              <LoaderCircle className="size-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+            {importer.isPending ? "Importing…" : "Validate and import"}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -786,7 +990,7 @@ function MagicStandaloneCreator({
                 onChange={(event) => setTopicId(event.target.value)}
                 value={topicId}
               >
-                <option value="">Broad subject coverage</option>
+                <option value="">Choose a topic</option>
                 {subject?.topics.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name}
@@ -866,7 +1070,10 @@ function MagicStandaloneCreator({
             <button
               className={primary}
               disabled={
-                !subjectId || context.trim().length < 20 || generate.isPending
+                !subjectId ||
+                !topicId ||
+                context.trim().length < 20 ||
+                generate.isPending
               }
               onClick={() => generate.mutate()}
               type="button"
@@ -1162,7 +1369,7 @@ function Editor({
             path,
             subjectId: path === "STANDALONE" ? subjectId : undefined,
             examSubjectId: path === "EXAM" ? examSubjectId : undefined,
-            topicId: path === "STANDALONE" ? topicId || undefined : undefined,
+            topicId: topicId || undefined,
             examSubjectYearId: path === "EXAM" ? yearLinkId : undefined,
             prompt,
             passage: passage || undefined,
@@ -1278,41 +1485,42 @@ function Editor({
             </label>
           ) : null}
         </div>
-        {path === "STANDALONE" ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-foreground text-[.63rem] font-bold">
-              Topic
-              <Select
-                className={`${input} mt-1.5`}
-                onChange={(event) => setTopicId(event.target.value)}
-                value={topicId}
-              >
-                <option value="">No topic</option>
-                {subject?.topics.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <label className="text-foreground text-[.63rem] font-bold">
-              Difficulty
-              <Select
-                className={`${input} mt-1.5`}
-                onChange={(event) =>
-                  setDifficulty(event.target.value as Difficulty)
-                }
-                value={difficulty}
-              >
-                {["EASY", "MEDIUM", "HARD"].map((item) => (
-                  <option key={item} value={item}>
-                    {labels(item)}
-                  </option>
-                ))}
-              </Select>
-            </label>
-          </div>
-        ) : null}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="text-foreground text-[.63rem] font-bold">
+            Topic (optional)
+            <Select
+              className={`${input} mt-1.5`}
+              onChange={(event) => setTopicId(event.target.value)}
+              value={topicId}
+            >
+              <option value="">No topic</option>
+              {(path === "EXAM"
+                ? (examSubject?.topics ?? [])
+                : (subject?.topics ?? [])
+              ).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className="text-foreground text-[.63rem] font-bold">
+            Difficulty
+            <Select
+              className={`${input} mt-1.5`}
+              onChange={(event) =>
+                setDifficulty(event.target.value as Difficulty)
+              }
+              value={difficulty}
+            >
+              {["EASY", "MEDIUM", "HARD"].map((item) => (
+                <option key={item} value={item}>
+                  {labels(item)}
+                </option>
+              ))}
+            </Select>
+          </label>
+        </div>
         <RichContentEditor
           label="Comprehension passage"
           minHeight="min-h-24"

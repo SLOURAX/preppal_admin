@@ -13,6 +13,7 @@ import {
 import { AdminShell } from "@/components/layout";
 import { AdminIcon, Select, type AdminIconName } from "@/components/ui";
 import { apiClient } from "@/lib/api/client";
+import { ExportCsvButton } from "@/components/export-csv-button";
 
 type Period = "1" | "7" | "30" | "0";
 type LedgerKind = "Check-in" | "Quiz" | "Referral" | "Weekly goal" | "Other";
@@ -309,6 +310,21 @@ export default function RewardsPage() {
             </section>
 
             <SectionCard
+              actions={
+                <ExportCsvButton
+                  filename={`preppal-reward-ledger-${new Date().toISOString().slice(0, 10)}`}
+                  rows={filteredLedger.map((item) => ({
+                    ID: item.id,
+                    Learner: item.learner,
+                    Email: item.email,
+                    Amount: item.amount,
+                    Kind: item.kind,
+                    Source: sourceLabel(item.source),
+                    Reason: item.reason,
+                    Date: item.createdAt,
+                  }))}
+                />
+              }
               description={`Latest ${period === "0" ? "all-time" : period === "1" ? "today's" : `${period}-day`} XP awards. Showing up to 250 recent records.`}
               title="XP issuance ledger"
             >

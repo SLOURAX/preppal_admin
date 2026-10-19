@@ -21,6 +21,7 @@ import { useState } from "react";
 import { AdminPageHeader, SegmentedControl } from "@/components/admin-ui";
 import { AdminShell } from "@/components/layout";
 import { apiClient } from "@/lib/api/client";
+import { ExportCsvButton } from "@/components/export-csv-button";
 
 type Period = "7" | "30" | "90" | "180" | "0";
 
@@ -332,10 +333,25 @@ export default function WalletOverviewPage() {
           <section className="mb-8">
             <div className="grid gap-6 lg:grid-cols-3">
               <div className="lg:col-span-2">
-                <SectionTitle
-                  title="Recent wallet transactions"
-                  sub="Latest deposits and withdrawal requests across all statuses"
-                />
+                <div className="mb-5 flex items-end justify-between gap-3">
+                  <SectionTitle
+                    title="Recent wallet transactions"
+                    sub="Latest deposits and withdrawal requests across all statuses"
+                  />
+                  <ExportCsvButton
+                    filename={`preppal-wallet-transactions-${new Date().toISOString().slice(0, 10)}`}
+                    rows={(data?.recentTransactions ?? []).map((item) => ({
+                      ID: item.id,
+                      User: item.user,
+                      Email: item.email,
+                      Type: item.type,
+                      "Amount (NGN)": item.amountMinor / 100,
+                      Coins: item.coinAmount,
+                      Status: item.status,
+                      Date: item.createdAt,
+                    }))}
+                  />
+                </div>
                 <div className="surface-card rounded-2xl p-5">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
