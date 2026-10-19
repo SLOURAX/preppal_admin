@@ -1198,27 +1198,30 @@ function MagicStandaloneCreator({
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {question.options.map((option, optionIndex) => (
-                  <label
-                    className={`flex items-center gap-2 rounded-xl border p-2 ${option.isCorrect ? "border-success/40 bg-success/5" : "border-border bg-background"}`}
+                  <div
+                    className={`flex items-center gap-2 rounded-xl border p-2 transition-colors ${option.isCorrect ? "border-success/40 bg-success/5" : "border-border bg-background"}`}
                     key={option.label}
                   >
-                    <input
-                      checked={option.isCorrect}
-                      name={`correct-${questionIndex}`}
-                      onChange={() =>
-                        updateQuestion(questionIndex, (current) => ({
-                          ...current,
-                          options: current.options.map((item, itemIndex) => ({
-                            ...item,
-                            isCorrect: itemIndex === optionIndex,
-                          })),
-                        }))
-                      }
-                      type="radio"
-                    />
-                    <span className="text-muted-foreground text-[.6rem] font-bold">
-                      {option.label}
-                    </span>
+                    <label className="flex cursor-pointer items-center gap-1.5 select-none">
+                      <input
+                        checked={option.isCorrect}
+                        className="cursor-pointer"
+                        name={`correct-${questionIndex}`}
+                        onChange={() =>
+                          updateQuestion(questionIndex, (current) => ({
+                            ...current,
+                            options: current.options.map((item, itemIndex) => ({
+                              ...item,
+                              isCorrect: itemIndex === optionIndex,
+                            })),
+                          }))
+                        }
+                        type="radio"
+                      />
+                      <span className="text-muted-foreground text-[.6rem] font-bold">
+                        {option.label}
+                      </span>
+                    </label>
                     <input
                       className="min-w-0 flex-1 bg-transparent text-[.67rem] outline-none"
                       onChange={(event) =>
@@ -1233,7 +1236,7 @@ function MagicStandaloneCreator({
                       }
                       value={option.text}
                     />
-                  </label>
+                  </div>
                 ))}
               </div>
               <div className="mt-3 grid gap-3 lg:grid-cols-2">
@@ -1537,29 +1540,47 @@ function Editor({
         />
         <div className="grid gap-2 sm:grid-cols-2">
           {options.map((option, index) => (
-            <label
-              className={`rounded-xl border p-2.5 ${option.isCorrect ? "border-success/50 bg-success/5" : "border-border"}`}
+            <div
+              className={`rounded-xl border p-2.5 transition-colors ${option.isCorrect ? "border-success/50 bg-success/5" : "border-border bg-surface"}`}
               key={option.label}
             >
-              <span className="text-foreground flex items-center gap-2 text-[.61rem] font-bold">
-                <input
-                  checked={option.isCorrect}
-                  name="correct"
-                  onChange={() =>
-                    setOptions((current) =>
-                      current.map((item, itemIndex) => ({
-                        ...item,
-                        isCorrect: itemIndex === index,
-                      })),
-                    )
-                  }
-                  type="radio"
-                />{" "}
-                Option {option.label}
+              <div className="text-foreground flex items-center justify-between text-[.61rem] font-bold">
+                <label className="flex cursor-pointer items-center gap-2 select-none">
+                  <input
+                    checked={option.isCorrect}
+                    className="cursor-pointer"
+                    name="correct"
+                    onChange={() =>
+                      setOptions((current) =>
+                        current.map((item, itemIndex) => ({
+                          ...item,
+                          isCorrect: itemIndex === index,
+                        })),
+                      )
+                    }
+                    type="radio"
+                  />
+                  <span>Option {option.label}</span>
+                </label>
                 {option.isCorrect ? (
-                  <span className="text-success ml-auto">Correct</span>
-                ) : null}
-              </span>
+                  <span className="text-success font-semibold">Correct</span>
+                ) : (
+                  <button
+                    className="text-muted-foreground hover:text-foreground text-[.58rem] font-normal transition-colors"
+                    onClick={() =>
+                      setOptions((current) =>
+                        current.map((item, itemIndex) => ({
+                          ...item,
+                          isCorrect: itemIndex === index,
+                        })),
+                      )
+                    }
+                    type="button"
+                  >
+                    Set as correct
+                  </button>
+                )}
+              </div>
               <div className="mt-2">
                 <RichContentEditor
                   label={`Option ${option.label}`}
@@ -1575,12 +1596,14 @@ function Editor({
                   value={option.text}
                 />
               </div>
-            </label>
+            </div>
           ))}
         </div>
-        <label className="text-foreground block text-[.63rem] font-bold">
-          Explanation{" "}
-          <span className="text-muted-foreground font-normal">(optional)</span>
+        <div>
+          <span className="text-foreground mb-1.5 block text-[.63rem] font-bold">
+            Explanation{" "}
+            <span className="text-muted-foreground font-normal">(optional)</span>
+          </span>
           <RichContentEditor
             label="Explanation"
             minHeight="min-h-20"
@@ -1588,7 +1611,7 @@ function Editor({
             placeholder="Explain the reasoning, calculations, or formula used to get the answer."
             value={explanation}
           />
-        </label>
+        </div>
         <label className="text-foreground block text-[.63rem] font-bold">
           Status
           <Select

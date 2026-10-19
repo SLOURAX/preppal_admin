@@ -93,6 +93,7 @@ export function RichContentEditor({
     if (
       editor &&
       document.activeElement !== editor &&
+      !editor.contains(document.activeElement) &&
       editor.innerHTML !== value
     ) {
       editor.innerHTML = value;
