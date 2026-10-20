@@ -10,6 +10,12 @@ export const ADMIN_NAVIGATION: ReadonlyArray<{
   { label: "Overview", href: "/dashboard", icon: "dashboard", group: null },
   { label: "Learners", href: "/users", icon: "users", group: "Learners" },
   {
+    label: "Rewards & goals",
+    href: "/rewards",
+    icon: "rewards",
+    group: "Learners",
+  },
+  {
     label: "Questions & exams",
     href: "/quizzes",
     icon: "content",
@@ -20,12 +26,6 @@ export const ADMIN_NAVIGATION: ReadonlyArray<{
     href: "/content",
     icon: "blog",
     group: "Content",
-  },
-  {
-    label: "Rewards & goals",
-    href: "/rewards",
-    icon: "rewards",
-    group: "Learners",
   },
   {
     label: "Wallets",
