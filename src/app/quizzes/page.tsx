@@ -11,6 +11,7 @@ import {
   BookOpen,
   CalendarDays,
   CheckCircle2,
+  Eye,
   FileQuestion,
   FolderTree,
   Layers3,
@@ -44,12 +45,20 @@ import {
 type Tab = "questions" | "exams" | "standalone" | "reports";
 type Path = "EXAM" | "STANDALONE";
 type Status = "ARCHIVED" | "DRAFT" | "IN_REVIEW" | "PUBLISHED";
-type Difficulty = "EASY" | "MEDIUM" | "HARD";
 interface Topic {
   id: string;
   name: string;
   slug: string;
   active: boolean;
+  subjectClassId?: string;
+}
+interface SubjectClass {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  active: boolean;
+  topics: Topic[];
 }
 interface Subject {
   id: string;
@@ -58,6 +67,7 @@ interface Subject {
   description?: string;
   active: boolean;
   topics: Topic[];
+  classes: SubjectClass[];
   _count?: { questions: number };
 }
 interface ExamSubjectYear {
@@ -72,7 +82,6 @@ interface ExamSubject {
   description?: string;
   active: boolean;
   years: ExamSubjectYear[];
-  topics: Topic[];
   _count: { questions: number };
 }
 interface Exam {
@@ -97,11 +106,10 @@ interface Question {
   prompt: string;
   passage?: string;
   explanation?: string;
-  difficulty: Difficulty;
   status: Status;
   subject?: Pick<Subject, "id" | "name" | "slug">;
   examSubject?: Pick<ExamSubject, "id" | "name" | "slug">;
-  topic?: Pick<Topic, "id" | "name" | "slug">;
+  topic?: Pick<Topic, "id" | "name" | "slug" | "subjectClassId">;
   options: Option[];
   updatedAt: string;
   examSubjectYear?: {
@@ -134,7 +142,6 @@ interface BatchDraftQuestion {
   prompt: string;
   passage?: string;
   explanation?: string;
-  difficulty: Difficulty;
   status: Status;
   options: Option[];
 }
@@ -228,7 +235,14 @@ function Empty({ children, title }: { children: ReactNode; title: string }) {
 }
 
 interface DeleteTarget {
-  type: "exam" | "subject" | "examSubject" | "year" | "topic" | "question";
+  type:
+    | "exam"
+    | "subject"
+    | "subjectClass"
+    | "examSubject"
+    | "year"
+    | "topic"
+    | "question";
   id: string;
   name: string;
   parentName?: string;
@@ -252,6 +266,8 @@ function ConfirmDeleteModal({
         return `/api/v1/admin/question-bank/exam-subjects/${target.id}`;
       case "subject":
         return `/api/v1/admin/question-bank/subjects/${target.id}`;
+      case "subjectClass":
+        return `/api/v1/admin/question-bank/subject-classes/${target.id}`;
       case "year":
         return `/api/v1/admin/question-bank/exam-subject-years/${target.id}`;
       case "topic":
@@ -268,7 +284,7 @@ function ConfirmDeleteModal({
           title: "Delete exam",
           itemLabel: `exam "${target.name}"`,
           cascadeNotice:
-            "This will permanently delete this exam and all its subjects, years, topics, and questions.",
+            "This will permanently delete this exam and all its subjects, years, and questions.",
           confirmButton: "Delete exam",
           successMessage: `Exam "${target.name}" and all its contents were deleted.`,
         };
@@ -276,7 +292,7 @@ function ConfirmDeleteModal({
         return {
           title: "Delete exam subject",
           itemLabel: `subject "${target.name}"`,
-          cascadeNotice: `This will permanently delete this exam subject and all its years, topics, and questions. The parent exam "${target.parentName || "Exam"}" will not be affected.`,
+          cascadeNotice: `This will permanently delete this exam subject and all its years and questions. The parent exam "${target.parentName || "Exam"}" will not be affected.`,
           confirmButton: "Delete subject",
           successMessage: `Subject "${target.name}" and its questions were deleted.`,
         };
@@ -288,6 +304,14 @@ function ConfirmDeleteModal({
             "This will permanently delete this standalone subject and all its topics and questions.",
           confirmButton: "Delete subject",
           successMessage: `Subject "${target.name}" and its questions were deleted.`,
+        };
+      case "subjectClass":
+        return {
+          title: "Delete class",
+          itemLabel: `class "${target.name}"`,
+          cascadeNotice: `This will delete the class, its topics, and their questions. The parent subject "${target.parentName || "Subject"}" will not be affected.`,
+          confirmButton: "Delete class",
+          successMessage: `Class "${target.name}" and its content were deleted.`,
         };
       case "year":
         return {
@@ -359,7 +383,7 @@ function ConfirmDeleteModal({
             Cancel
           </button>
           <button
-            className="bg-danger text-white hover:bg-danger/90 inline-flex h-9 items-center justify-center gap-1.5 rounded-xl px-4 text-[.66rem] font-bold transition-colors disabled:opacity-50"
+            className="bg-danger hover:bg-danger/90 inline-flex h-9 items-center justify-center gap-1.5 rounded-xl px-4 text-[.66rem] font-bold text-white transition-colors disabled:opacity-50"
             disabled={del.isPending}
             onClick={() => del.mutate()}
             type="button"
@@ -471,8 +495,6 @@ function ExamSetup({
   const [newSubject, setNewSubject] = useState("");
   const [year, setYear] = useState(new Date().getFullYear());
   const [yearOwner, setYearOwner] = useState("");
-  const [topicOwner, setTopicOwner] = useState("");
-  const [newTopic, setNewTopic] = useState("");
   const [createExam, setCreateExam] = useState(false);
   const [importExamJson, setImportExamJson] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
@@ -499,20 +521,6 @@ function ExamSetup({
         { method: "POST", body: JSON.stringify({ year }) },
       ),
     onSuccess: () => refresh("Exam year added."),
-  });
-  const addTopic = useMutation({
-    mutationFn: () =>
-      apiClient(
-        `/api/v1/admin/question-bank/exam-subjects/${topicOwner}/topics`,
-        {
-          method: "POST",
-          body: JSON.stringify({ name: newTopic.trim() }),
-        },
-      ),
-    onSuccess: async () => {
-      setNewTopic("");
-      await refresh("Exam topic added.");
-    },
   });
   return (
     <div className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
@@ -549,7 +557,9 @@ function ExamSetup({
                 type="button"
               >
                 <BookOpen className="size-4 shrink-0" />
-                <span className="truncate text-[.7rem] font-bold">{item.name}</span>
+                <span className="truncate text-[.7rem] font-bold">
+                  {item.name}
+                </span>
                 <span className="text-muted-foreground ml-auto pr-1 text-[.58rem]">
                   {item.subjects.length}
                 </span>
@@ -558,7 +568,11 @@ function ExamSetup({
                 className="text-muted-foreground hover:text-danger hover:bg-danger/10 rounded-lg p-1.5 opacity-60 transition-colors hover:opacity-100"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setDeleteTarget({ type: "exam", id: item.id, name: item.name });
+                  setDeleteTarget({
+                    type: "exam",
+                    id: item.id,
+                    name: item.name,
+                  });
                 }}
                 title={`Delete exam ${item.name}`}
                 type="button"
@@ -606,7 +620,12 @@ function ExamSetup({
                     disabled={!newSubject.trim() || addNewSubject.isPending}
                     type="submit"
                   >
-                    <Plus className="size-3.5" /> Add
+                    {addNewSubject.isPending ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : (
+                      <Plus className="size-3.5" />
+                    )}
+                    {addNewSubject.isPending ? "Adding…" : "Add"}
                   </button>
                 </div>
                 {addNewSubject.error ? (
@@ -618,8 +637,8 @@ function ExamSetup({
             </div>
           </SectionCard>
           <SectionCard
-            description="Configure the years and optional topics available for each exam subject."
-            title="Exam subjects, years and topics"
+            description="Configure the years available for each exam subject."
+            title="Exam subjects and years"
           >
             <div className="space-y-3">
               {exam.subjects.map((entry) => (
@@ -650,8 +669,7 @@ function ExamSetup({
                         </button>
                       </div>
                       <p className="text-muted-foreground mt-1 text-[.58rem]">
-                        {entry._count.questions} questions ·{" "}
-                        {(entry.topics ?? []).length} topics
+                        {entry._count.questions} questions
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
@@ -685,33 +703,6 @@ function ExamSetup({
                       ) : null}
                     </div>
                   </div>
-                  {(entry.topics ?? []).length ? (
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {(entry.topics ?? []).map((topic) => (
-                        <span
-                          className="bg-surface-subtle text-foreground inline-flex items-center gap-1 rounded-full py-0.5 pr-1.5 pl-2.5 text-[.56rem]"
-                          key={topic.id}
-                        >
-                          <span>{topic.name}</span>
-                          <button
-                            className="hover:text-danger hover:bg-danger/10 rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100"
-                            onClick={() =>
-                              setDeleteTarget({
-                                type: "topic",
-                                id: topic.id,
-                                name: topic.name,
-                                parentName: entry.name,
-                              })
-                            }
-                            title={`Delete topic ${topic.name}`}
-                            type="button"
-                          >
-                            <X className="size-2.5" />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
                   <div className="border-border mt-3 grid gap-2 border-t pt-3 sm:grid-cols-[130px_auto] sm:justify-end">
                     <input
                       className={input}
@@ -730,42 +721,21 @@ function ExamSetup({
                     <div className="flex gap-2">
                       <button
                         className={secondary}
-                        disabled={yearOwner !== entry.id}
+                        disabled={yearOwner !== entry.id || addYear.isPending}
                         onClick={() => addYear.mutate()}
                         type="button"
                       >
-                        <CalendarDays className="size-3.5" /> Year
+                        {addYear.isPending && yearOwner === entry.id ? (
+                          <LoaderCircle className="size-3.5 animate-spin" />
+                        ) : (
+                          <CalendarDays className="size-3.5" />
+                        )}
+                        {addYear.isPending && yearOwner === entry.id
+                          ? "Adding…"
+                          : "Year"}
                       </button>
                     </div>
                   </div>
-                  <form
-                    className="border-border mt-3 flex gap-2 border-t pt-3"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      addTopic.mutate();
-                    }}
-                  >
-                    <input
-                      className={input}
-                      onChange={(event) => {
-                        setTopicOwner(entry.id);
-                        setNewTopic(event.target.value);
-                      }}
-                      placeholder="Add an exam topic"
-                      value={topicOwner === entry.id ? newTopic : ""}
-                    />
-                    <button
-                      className={secondary}
-                      disabled={
-                        topicOwner !== entry.id ||
-                        !newTopic.trim() ||
-                        addTopic.isPending
-                      }
-                      type="submit"
-                    >
-                      <Plus className="size-3.5" /> Topic
-                    </button>
-                  </form>
                 </article>
               ))}
               {!exam.subjects.length ? (
@@ -822,11 +792,9 @@ const EXAM_IMPORT_EXAMPLE = JSON.stringify(
     status: "DRAFT",
     questions: [
       {
-        topic: "Algebra",
         prompt: "Solve 2x + 4 = 10.",
         passage: "",
         explanation: "Subtract 4, then divide by 2.",
-        difficulty: "EASY",
         options: ["2", "3", "4", "5"],
         correctAnswer: "B",
       },
@@ -860,7 +828,6 @@ function ExamJsonImporter({
         exam: { name: string };
         subject: { name: string };
         year: number;
-        topics: number;
       }>("/api/v1/admin/question-bank/questions/exam-json-import", {
         method: "POST",
         body: JSON.stringify(payload),
@@ -868,7 +835,7 @@ function ExamJsonImporter({
     },
     onSuccess: (result) =>
       onDone(
-        `${result.created} questions imported into ${result.exam.name} ${result.subject.name} (${result.year}) across ${result.topics} topic${result.topics === 1 ? "" : "s"}.`,
+        `${result.created} questions imported into ${result.exam.name} ${result.subject.name} (${result.year}).`,
       ),
   });
 
@@ -883,11 +850,10 @@ function ExamJsonImporter({
             Required top-level keys: <strong>exam</strong>,{" "}
             <strong>subject</strong>, <strong>year</strong>,{" "}
             <strong>status</strong>, and <strong>questions</strong>. Every
-            question requires <strong>topic</strong>, <strong>prompt</strong>,{" "}
-            <strong>difficulty</strong>, <strong>options</strong>, and{" "}
-            <strong>correctAnswer</strong>. correctAnswer is the option letter
-            A–F. Use DRAFT while reviewing; use PUBLISHED only for approved
-            content.
+            question requires <strong>prompt</strong>, <strong>options</strong>{" "}
+            and <strong>correctAnswer</strong>. correctAnswer is the option
+            letter A–F. Use DRAFT while reviewing; use PUBLISHED only for
+            approved content.
           </p>
         </div>
         <label className="text-foreground block text-[.63rem] font-bold">
@@ -954,17 +920,35 @@ function Standalone({
   >(null);
   const [owner, setOwner] = useState("");
   const [topic, setTopic] = useState("");
+  const [classOwner, setClassOwner] = useState("");
+  const [className, setClassName] = useState("");
+  const [topicClassId, setTopicClassId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const add = useMutation({
     mutationFn: () =>
       apiClient(`/api/v1/admin/question-bank/subjects/${owner}/topics`, {
         method: "POST",
-        body: JSON.stringify({ name: topic.trim() }),
+        body: JSON.stringify({
+          name: topic.trim(),
+          subjectClassId: topicClassId,
+        }),
       }),
     onSuccess: async () => {
       setTopic("");
       await cache.invalidateQueries({ queryKey: ["admin", "question-bank"] });
       notify("Topic added.");
+    },
+  });
+  const addClass = useMutation({
+    mutationFn: () =>
+      apiClient(`/api/v1/admin/question-bank/subjects/${classOwner}/classes`, {
+        method: "POST",
+        body: JSON.stringify({ name: className.trim() }),
+      }),
+    onSuccess: async () => {
+      setClassName("");
+      await cache.invalidateQueries({ queryKey: ["admin", "question-bank"] });
+      notify("Class added.");
     },
   });
   return (
@@ -1023,31 +1007,91 @@ function Standalone({
             </h3>
             <p className="text-muted-foreground mt-1 text-[.58rem]">
               {subject._count?.questions ?? 0} questions ·{" "}
-              {subject.topics.length} topics
+              {subject.classes.length} classes · {subject.topics.length} topics
             </p>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {subject.topics.map((item) => (
-                <span
-                  className="bg-surface-subtle text-foreground inline-flex items-center gap-1 rounded-full py-0.5 pr-1.5 pl-2.5 text-[.56rem]"
-                  key={item.id}
+            <div className="mt-3 space-y-2">
+              {subject.classes.map((subjectClass) => (
+                <div
+                  className="border-border bg-surface-subtle/40 rounded-xl border p-2.5"
+                  key={subjectClass.id}
                 >
-                  <span>{item.name}</span>
-                  <button
-                    className="hover:text-danger hover:bg-danger/10 rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100"
-                    onClick={() =>
-                      setDeleteTarget({
-                        type: "topic",
-                        id: item.id,
-                        name: item.name,
-                        parentName: subject.name,
-                      })
-                    }
-                    title={`Delete topic ${item.name}`}
-                    type="button"
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-foreground text-[.62rem] font-bold">
+                      {subjectClass.name}
+                    </p>
+                    <button
+                      className="text-muted-foreground hover:text-danger"
+                      onClick={() =>
+                        setDeleteTarget({
+                          type: "subjectClass",
+                          id: subjectClass.id,
+                          name: subjectClass.name,
+                          parentName: subject.name,
+                        })
+                      }
+                      type="button"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {subjectClass.topics.map((item) => (
+                      <span
+                        className="bg-surface text-foreground inline-flex items-center gap-1 rounded-full py-0.5 pr-1.5 pl-2.5 text-[.56rem]"
+                        key={item.id}
+                      >
+                        <span>{item.name}</span>
+                        <button
+                          className="hover:text-danger rounded-full p-0.5"
+                          onClick={() =>
+                            setDeleteTarget({
+                              type: "topic",
+                              id: item.id,
+                              name: item.name,
+                              parentName: `${subject.name} · ${subjectClass.name}`,
+                            })
+                          }
+                          type="button"
+                        >
+                          <X className="size-2.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <form
+                    className="mt-2 flex gap-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      add.mutate();
+                    }}
                   >
-                    <X className="size-2.5" />
-                  </button>
-                </span>
+                    <input
+                      className={input}
+                      onChange={(event) => {
+                        setOwner(subject.id);
+                        setTopicClassId(subjectClass.id);
+                        setTopic(event.target.value);
+                      }}
+                      placeholder="Add topic"
+                      value={topicClassId === subjectClass.id ? topic : ""}
+                    />
+                    <button
+                      className={secondary}
+                      disabled={
+                        topicClassId !== subjectClass.id ||
+                        !topic.trim() ||
+                        add.isPending
+                      }
+                      type="submit"
+                    >
+                      {add.isPending && topicClassId === subjectClass.id ? (
+                        <LoaderCircle className="size-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="size-3.5" />
+                      )}
+                    </button>
+                  </form>
+                </div>
               ))}
             </div>
             <button
@@ -1061,24 +1105,32 @@ function Standalone({
               className="border-border mt-3 flex gap-2 border-t pt-3"
               onSubmit={(event) => {
                 event.preventDefault();
-                add.mutate();
+                addClass.mutate();
               }}
             >
               <input
                 className={input}
                 onChange={(event) => {
-                  setOwner(subject.id);
-                  setTopic(event.target.value);
+                  setClassOwner(subject.id);
+                  setClassName(event.target.value);
                 }}
-                placeholder="Add topic"
-                value={owner === subject.id ? topic : ""}
+                placeholder="Add class (e.g. SS 1)"
+                value={classOwner === subject.id ? className : ""}
               />
               <button
                 className={secondary}
-                disabled={owner !== subject.id || !topic.trim()}
+                disabled={
+                  classOwner !== subject.id ||
+                  !className.trim() ||
+                  addClass.isPending
+                }
                 type="submit"
               >
-                <Plus className="size-3.5" />
+                {addClass.isPending && classOwner === subject.id ? (
+                  <LoaderCircle className="size-3.5 animate-spin" />
+                ) : (
+                  <Plus className="size-3.5" />
+                )}
               </button>
             </form>
           </article>
@@ -1114,7 +1166,9 @@ function Standalone({
         <ConfirmDeleteModal
           onClose={() => setDeleteTarget(null)}
           onDeleted={async (message) => {
-            await cache.invalidateQueries({ queryKey: ["admin", "question-bank"] });
+            await cache.invalidateQueries({
+              queryKey: ["admin", "question-bank"],
+            });
             notify(message);
           }}
           target={deleteTarget}
@@ -1123,7 +1177,6 @@ function Standalone({
     </SectionCard>
   );
 }
-
 
 function MagicStandaloneCreator({
   data,
@@ -1138,8 +1191,8 @@ function MagicStandaloneCreator({
 }) {
   const cache = useQueryClient();
   const [subjectId, setSubjectId] = useState(initialSubjectId);
+  const [subjectClassId, setSubjectClassId] = useState("");
   const [topicId, setTopicId] = useState("");
-  const [difficulty, setDifficulty] = useState<Difficulty | "MIXED">("MIXED");
   const [style, setStyle] = useState<
     "MIXED" | "CONCEPTUAL" | "APPLIED" | "COMPREHENSION"
   >("MIXED");
@@ -1149,6 +1202,9 @@ function MagicStandaloneCreator({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [saveStatus, setSaveStatus] = useState<Status>("DRAFT");
   const subject = data.standaloneSubjects.find((item) => item.id === subjectId);
+  const subjectClass = subject?.classes.find(
+    (item) => item.id === subjectClassId,
+  );
   const selectedQuestions = questions.filter((_, index) => selected.has(index));
   const selectedAreValid =
     selectedQuestions.length > 0 &&
@@ -1168,8 +1224,8 @@ function MagicStandaloneCreator({
           method: "POST",
           body: JSON.stringify({
             subjectId,
-            topicId: topicId || undefined,
-            difficulty,
+            subjectClassId,
+            topicId,
             style,
             count,
             context: context.trim(),
@@ -1232,8 +1288,7 @@ function MagicStandaloneCreator({
                 </p>
                 <p className="text-muted-foreground mt-1 text-[.64rem] leading-5">
                   AI creates editable drafts only. Review the wording, answer,
-                  explanation, and difficulty before selecting what enters the
-                  question bank.
+                  explanation before selecting what enters the question bank.
                 </p>
               </div>
             </div>
@@ -1245,11 +1300,30 @@ function MagicStandaloneCreator({
                 className={`${input} mt-1.5`}
                 onChange={(event) => {
                   setSubjectId(event.target.value);
+                  setSubjectClassId("");
                   setTopicId("");
                 }}
                 value={subjectId}
               >
                 {data.standaloneSubjects.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="text-foreground text-[.63rem] font-bold">
+              Class
+              <Select
+                className={`${input} mt-1.5`}
+                onChange={(event) => {
+                  setSubjectClassId(event.target.value);
+                  setTopicId("");
+                }}
+                value={subjectClassId}
+              >
+                <option value="">Choose a class</option>
+                {subject?.classes.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name}
                   </option>
@@ -1264,25 +1338,9 @@ function MagicStandaloneCreator({
                 value={topicId}
               >
                 <option value="">Choose a topic</option>
-                {subject?.topics.map((item) => (
+                {subjectClass?.topics.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <label className="text-foreground text-[.63rem] font-bold">
-              Difficulty
-              <Select
-                className={`${input} mt-1.5`}
-                onChange={(event) =>
-                  setDifficulty(event.target.value as Difficulty | "MIXED")
-                }
-                value={difficulty}
-              >
-                {(["MIXED", "EASY", "MEDIUM", "HARD"] as const).map((item) => (
-                  <option key={item} value={item}>
-                    {labels(item)}
                   </option>
                 ))}
               </Select>
@@ -1344,6 +1402,7 @@ function MagicStandaloneCreator({
               className={primary}
               disabled={
                 !subjectId ||
+                !subjectClassId ||
                 !topicId ||
                 context.trim().length < 20 ||
                 generate.isPending
@@ -1423,9 +1482,6 @@ function MagicStandaloneCreator({
                 <p className="text-foreground text-[.7rem] font-bold">
                   Question {questionIndex + 1}
                 </p>
-                <StatusBadge tone="info">
-                  {labels(question.difficulty)}
-                </StatusBadge>
                 <button
                   aria-label={`Remove question ${questionIndex + 1}`}
                   className="text-danger hover:bg-danger/10 ml-auto grid size-8 place-items-center rounded-lg"
@@ -1435,7 +1491,7 @@ function MagicStandaloneCreator({
                   <Trash2 className="size-3.5" />
                 </button>
               </div>
-              <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_150px]">
+              <div className="mt-3">
                 <label className="text-foreground text-[.61rem] font-bold">
                   Question prompt
                   <textarea
@@ -1448,25 +1504,6 @@ function MagicStandaloneCreator({
                     }
                     value={question.prompt}
                   />
-                </label>
-                <label className="text-foreground text-[.61rem] font-bold">
-                  Difficulty
-                  <Select
-                    className={`${input} mt-1.5`}
-                    onChange={(event) =>
-                      updateQuestion(questionIndex, (current) => ({
-                        ...current,
-                        difficulty: event.target.value as Difficulty,
-                      }))
-                    }
-                    value={question.difficulty}
-                  >
-                    {(["EASY", "MEDIUM", "HARD"] as const).map((item) => (
-                      <option key={item} value={item}>
-                        {labels(item)}
-                      </option>
-                    ))}
-                  </Select>
                 </label>
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -1615,8 +1652,8 @@ function Editor({
     editing?.examSubjectYear?.id ?? "",
   );
   const [topicId, setTopicId] = useState(editing?.topic?.id ?? "");
-  const [difficulty, setDifficulty] = useState<Difficulty>(
-    editing?.difficulty ?? "MEDIUM",
+  const [subjectClassId, setSubjectClassId] = useState(
+    editing?.topic?.subjectClassId ?? "",
   );
   const [status, setStatus] = useState<Status>(editing?.status ?? "DRAFT");
   const [prompt, setPrompt] = useState(editing?.prompt ?? "");
@@ -1635,6 +1672,9 @@ function Editor({
     path === "STANDALONE"
       ? data.standaloneSubjects.find((item) => item.id === subjectId)
       : undefined;
+  const subjectClass = subject?.classes.find(
+    (item) => item.id === subjectClassId,
+  );
   const save = useMutation({
     mutationFn: () =>
       apiClient(
@@ -1645,12 +1685,11 @@ function Editor({
             path,
             subjectId: path === "STANDALONE" ? subjectId : undefined,
             examSubjectId: path === "EXAM" ? examSubjectId : undefined,
-            topicId: topicId || undefined,
+            topicId: path === "STANDALONE" ? topicId || undefined : undefined,
             examSubjectYearId: path === "EXAM" ? yearLinkId : undefined,
             prompt,
             passage: passage || undefined,
             explanation: explanation || undefined,
-            difficulty,
             status,
             options,
           }),
@@ -1663,7 +1702,9 @@ function Editor({
   });
   const ready =
     prompt.trim().length >= 5 &&
-    (path === "EXAM" ? examSubjectId && yearLinkId : subjectId) &&
+    (path === "EXAM"
+      ? examSubjectId && yearLinkId
+      : subjectId && subjectClassId && topicId) &&
     options.every((item) => item.text.trim()) &&
     (path === "STANDALONE" || yearLinkId);
   return (
@@ -1689,6 +1730,7 @@ function Editor({
                 setExamSubjectId("");
                 setYearLinkId("");
                 setTopicId("");
+                setSubjectClassId("");
               }}
               type="button"
             >
@@ -1729,6 +1771,7 @@ function Editor({
                 else setSubjectId(event.target.value);
                 setYearLinkId("");
                 setTopicId("");
+                setSubjectClassId("");
               }}
               value={path === "EXAM" ? examSubjectId : subjectId}
             >
@@ -1761,42 +1804,43 @@ function Editor({
             </label>
           ) : null}
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-foreground text-[.63rem] font-bold">
-            Topic (optional)
-            <Select
-              className={`${input} mt-1.5`}
-              onChange={(event) => setTopicId(event.target.value)}
-              value={topicId}
-            >
-              <option value="">No topic</option>
-              {(path === "EXAM"
-                ? (examSubject?.topics ?? [])
-                : (subject?.topics ?? [])
-              ).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <label className="text-foreground text-[.63rem] font-bold">
-            Difficulty
-            <Select
-              className={`${input} mt-1.5`}
-              onChange={(event) =>
-                setDifficulty(event.target.value as Difficulty)
-              }
-              value={difficulty}
-            >
-              {["EASY", "MEDIUM", "HARD"].map((item) => (
-                <option key={item} value={item}>
-                  {labels(item)}
-                </option>
-              ))}
-            </Select>
-          </label>
-        </div>
+        {path === "STANDALONE" ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-foreground text-[.63rem] font-bold">
+              Class
+              <Select
+                className={`${input} mt-1.5`}
+                onChange={(event) => {
+                  setSubjectClassId(event.target.value);
+                  setTopicId("");
+                }}
+                value={subjectClassId}
+              >
+                <option value="">Choose class</option>
+                {subject?.classes.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="text-foreground text-[.63rem] font-bold">
+              Topic
+              <Select
+                className={`${input} mt-1.5`}
+                onChange={(event) => setTopicId(event.target.value)}
+                value={topicId}
+              >
+                <option value="">Choose topic</option>
+                {subjectClass?.topics.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </div>
+        ) : null}
         <RichContentEditor
           label="Comprehension passage"
           minHeight="min-h-24"
@@ -1838,7 +1882,9 @@ function Editor({
                   </label>
                   <div className="flex items-center gap-2">
                     {option.isCorrect ? (
-                      <span className="text-success font-semibold">Correct</span>
+                      <span className="text-success font-semibold">
+                        Correct
+                      </span>
                     ) : (
                       <button
                         className="text-muted-foreground hover:text-foreground text-[.58rem] font-normal transition-colors"
@@ -1916,7 +1962,9 @@ function Editor({
         <div>
           <span className="text-foreground mb-1.5 block text-[.63rem] font-bold">
             Explanation{" "}
-            <span className="text-muted-foreground font-normal">(optional)</span>
+            <span className="text-muted-foreground font-normal">
+              (optional)
+            </span>
           </span>
           <RichContentEditor
             label="Explanation"
@@ -2151,7 +2199,7 @@ export default function QuestionsPage() {
                         <th className="px-3 pb-3">Path</th>
                         <th className="px-3 pb-3">Subject</th>
                         <th className="px-3 pb-3">Status</th>
-                        <th className="pb-3 text-right">Action</th>
+                        <th className="w-[190px] pb-3 text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-border divide-y">
@@ -2183,30 +2231,35 @@ export default function QuestionsPage() {
                               {labels(item.status)}
                             </StatusBadge>
                           </td>
-                          <td className="py-3 text-right">
-                            <button
-                              className="text-primary px-2 py-1 text-[.62rem] font-bold"
-                              onClick={() => setPreview(item)}
-                              type="button"
-                            >
-                              View
-                            </button>
-                            <button
-                              className="text-primary p-2"
-                              onClick={() => setEditor(item)}
-                              title="Edit"
-                              type="button"
-                            >
-                              <Pencil className="size-3.5" />
-                            </button>
-                            <button
-                              className="text-muted-foreground hover:text-danger p-2 transition-colors"
-                              onClick={() => setDeleteQuestion(item)}
-                              title="Delete question"
-                              type="button"
-                            >
-                              <Trash2 className="size-3.5" />
-                            </button>
+                          <td className="py-3 align-middle">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                className="border-border bg-surface hover:border-primary/35 hover:bg-primary/5 text-primary inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[.6rem] font-bold transition-colors"
+                                onClick={() => setPreview(item)}
+                                type="button"
+                              >
+                                <Eye className="size-3.5" />
+                                View
+                              </button>
+                              <button
+                                aria-label="Edit question"
+                                className="border-primary/20 bg-primary/8 text-primary hover:bg-primary/15 inline-flex size-8 items-center justify-center rounded-lg border transition-colors"
+                                onClick={() => setEditor(item)}
+                                title="Edit question"
+                                type="button"
+                              >
+                                <Pencil className="size-3.5" />
+                              </button>
+                              <button
+                                aria-label="Delete question"
+                                className="border-border bg-surface text-muted-foreground hover:border-danger/30 hover:bg-danger/5 hover:text-danger inline-flex size-8 items-center justify-center rounded-lg border transition-colors"
+                                onClick={() => setDeleteQuestion(item)}
+                                title="Delete question"
+                                type="button"
+                              >
+                                <Trash2 className="size-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -2314,7 +2367,6 @@ export default function QuestionsPage() {
             <StatusBadge tone={tone(preview.status)}>
               {labels(preview.status)}
             </StatusBadge>
-            <StatusBadge>{labels(preview.difficulty)}</StatusBadge>
           </div>
           {preview.passage ? (
             <div className="bg-surface-subtle mt-4 rounded-xl p-3">

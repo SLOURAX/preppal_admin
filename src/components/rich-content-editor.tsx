@@ -163,7 +163,7 @@ export function RichContentEditor({
             : reject(new Error("Could not read this image."));
         reader.readAsDataURL(file);
       });
-      const asset = await apiClient<{ id: string }>(
+      const asset = await apiClient<{ id: string; url?: string | null }>(
         "/api/v1/admin/question-bank/assets",
         {
           method: "POST",
@@ -174,7 +174,8 @@ export function RichContentEditor({
           }),
         },
       );
-      const src = `${env.apiUrl}/api/v1/question-bank/assets/${asset.id}`;
+      const src =
+        asset.url ?? `${env.apiUrl}/api/v1/question-bank/assets/${asset.id}`;
       const alt = escapeHtml(imageAlt.trim());
       insertHtml(
         `<figure><img src="${escapeHtml(src)}" alt="${alt}" /><figcaption>${alt || "Diagram"}</figcaption></figure>`,

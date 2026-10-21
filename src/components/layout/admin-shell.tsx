@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Command,
   LogOut,
+  LoaderCircle,
   Menu,
   Search,
   ShieldCheck,
@@ -18,7 +19,7 @@ import { useEffect, useState, type PropsWithChildren } from "react";
 
 import { AdminIcon } from "@/components/ui";
 import { ADMIN_NAVIGATION } from "@/constants";
-import { apiClient } from "@/lib/api/client";
+import { ADMIN_MUTATION_EVENT, apiClient } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
 import { ThemeToggle } from "./theme-toggle";
@@ -139,6 +140,7 @@ export function AdminShell({ children }: PropsWithChildren) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeMutations, setActiveMutations] = useState(0);
   const session = useQuery({
     queryKey: ["auth", "admin", "session"],
     queryFn: () => apiClient<AdminSession>("/api/v1/auth/admin/me"),
@@ -178,6 +180,16 @@ export function AdminShell({ children }: PropsWithChildren) {
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
+  }, []);
+
+  useEffect(() => {
+    const trackMutation = (event: Event) => {
+      const delta = (event as CustomEvent<{ delta?: number }>).detail?.delta;
+      if (delta !== 1 && delta !== -1) return;
+      setActiveMutations((current) => Math.max(0, current + delta));
+    };
+    window.addEventListener(ADMIN_MUTATION_EVENT, trackMutation);
+    return () => window.removeEventListener(ADMIN_MUTATION_EVENT, trackMutation);
   }, []);
 
   const signOut = async () => {
@@ -277,6 +289,16 @@ export function AdminShell({ children }: PropsWithChildren) {
       ) : null}
 
       <main className="admin-workspace min-h-screen min-w-0 lg:pl-[17rem]">
+        {activeMutations > 0 ? (
+          <div
+            aria-label="Saving changes"
+            aria-live="polite"
+            className="pointer-events-none fixed inset-x-0 top-0 z-[120] h-0.5 overflow-hidden bg-primary/15"
+            role="status"
+          >
+            <span className="bg-primary block h-full w-full animate-pulse rounded-full" />
+          </div>
+        ) : null}
         <header className="border-border bg-surface/88 sticky top-0 z-30 flex h-16 items-center gap-3 border-b px-4 backdrop-blur-xl sm:px-6 lg:px-8">
           <button
             aria-label="Open navigation"
@@ -308,6 +330,11 @@ export function AdminShell({ children }: PropsWithChildren) {
             </kbd>
           </button>
           <ThemeToggle />
+          {activeMutations > 0 ? (
+            <span className="bg-primary/10 text-primary hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[.6rem] font-bold sm:inline-flex">
+              <LoaderCircle className="size-3 animate-spin" /> Saving…
+            </span>
+          ) : null}
           <div className="hidden items-center gap-2 border-l pl-3 md:flex">
             <span className="bg-primary text-primary-foreground grid size-8 place-items-center rounded-xl text-[.62rem] font-bold">
               {initials}

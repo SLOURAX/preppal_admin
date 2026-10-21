@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Crown,
   Mail,
+  LoaderCircle,
   Phone,
   Search,
   Target,
@@ -749,9 +750,16 @@ export default function UsersPage() {
                     }
                     type="button"
                   >
-                    {selectedUser.status === "Suspended"
-                      ? "Restore account"
-                      : "Suspend account"}
+                    {accountAction.isPending ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <LoaderCircle className="size-3.5 animate-spin" />
+                        Updating…
+                      </span>
+                    ) : selectedUser.status === "Suspended" ? (
+                      "Restore account"
+                    ) : (
+                      "Suspend account"
+                    )}
                   </button>
                   <Select
                     aria-label="Change user role"
@@ -780,7 +788,7 @@ export default function UsersPage() {
                     type="button"
                   >
                     {revokeSessions.isPending
-                      ? "Revoking sessions…"
+                      ? <span className="inline-flex items-center gap-1.5"><LoaderCircle className="size-3.5 animate-spin" /> Revoking…</span>
                       : "Revoke sessions"}
                   </button>
                 </div>

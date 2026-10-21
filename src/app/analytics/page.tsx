@@ -642,7 +642,7 @@ export default function AnalyticsPage() {
           <section className="mb-8">
             <SectionTitle
               title="Learning analytics"
-              sub="Platform-wide subject accuracy, exam track performance, and question difficulty"
+              sub="Platform-wide subject accuracy and exam-track performance"
             />
             <div className="grid gap-4 lg:grid-cols-2">
               {/* Subject accuracy */}

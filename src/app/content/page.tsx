@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { Pagination } from "@/components/admin-ui";
@@ -1368,13 +1368,31 @@ function DiscussionsPanel({
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <ModerateButton
+                      disabled={moderate.isPending || remove.isPending}
                       onClick={() =>
-                        moderate.mutate({ id: comment.id, status: "FLAGGED" })
+                        moderate.mutate({
+                          id: comment.id,
+                          status:
+                            comment.status === "FLAGGED"
+                              ? "APPROVED"
+                              : "FLAGGED",
+                        })
                       }
                     >
-                      <Flag className="size-3.5" /> Flag
+                      {moderate.isPending &&
+                      moderate.variables?.id === comment.id &&
+                      moderate.variables.status ===
+                        (comment.status === "FLAGGED"
+                          ? "APPROVED"
+                          : "FLAGGED") ? (
+                        <LoaderCircle className="size-3.5 animate-spin" />
+                      ) : (
+                        <Flag className="size-3.5" />
+                      )}
+                      {comment.status === "FLAGGED" ? "Unflag" : "Flag"}
                     </ModerateButton>
                     <ModerateButton
+                      disabled={moderate.isPending || remove.isPending}
                       onClick={() =>
                         moderate.mutate({
                           id: comment.id,
@@ -1383,16 +1401,30 @@ function DiscussionsPanel({
                         })
                       }
                     >
-                      <Eye className="size-3.5" />
+                      {moderate.isPending &&
+                      moderate.variables?.id === comment.id &&
+                      moderate.variables.status ===
+                        (comment.status === "HIDDEN"
+                          ? "APPROVED"
+                          : "HIDDEN") ? (
+                        <LoaderCircle className="size-3.5 animate-spin" />
+                      ) : (
+                        <Eye className="size-3.5" />
+                      )}
                       {comment.status === "HIDDEN" ? "Unhide" : "Hide"}
                     </ModerateButton>
                     <button
                       aria-label="Delete comment"
-                      className="text-danger hover:bg-danger/10 grid size-8 place-items-center rounded-lg"
+                      className="text-danger hover:bg-danger/10 grid size-8 place-items-center rounded-lg disabled:cursor-wait disabled:opacity-50"
+                      disabled={moderate.isPending || remove.isPending}
                       onClick={() => remove.mutate(comment.id)}
                       type="button"
                     >
-                      <Trash2 className="size-3.5" />
+                      {remove.isPending && remove.variables === comment.id ? (
+                        <LoaderCircle className="size-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="size-3.5" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -1405,6 +1437,13 @@ function DiscussionsPanel({
             </p>
           ) : null}
         </div>
+        {moderate.isError || remove.isError ? (
+          <p className="bg-danger/10 text-danger mx-5 mb-4 rounded-xl p-3 text-[.65rem] font-semibold sm:mx-6">
+            {moderate.error?.message ??
+              remove.error?.message ??
+              "The discussion action could not be completed."}
+          </p>
+        ) : null}
         <div className="px-5 pb-4 sm:px-6">
           <Pagination
             currentPage={currentPage}
@@ -1441,14 +1480,17 @@ function DiscussionsPanel({
 
 function ModerateButton({
   children,
+  disabled,
   onClick,
 }: {
   readonly children: React.ReactNode;
+  readonly disabled?: boolean;
   readonly onClick: () => void;
 }) {
   return (
     <button
-      className="border-border flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[.64rem] font-bold"
+      className="border-border flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[.64rem] font-bold disabled:cursor-wait disabled:opacity-50"
+      disabled={disabled}
       onClick={onClick}
       type="button"
     >
@@ -1458,7 +1500,50 @@ function ModerateButton({
 }
 
 function MediaPanel({ media }: { readonly media: BlogMedia[] }) {
+  const cache = useQueryClient();
   const [query, setQuery] = useState("");
+  const [uploadError, setUploadError] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const upload = useMutation({
+    mutationFn: async (file: File) => {
+      if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type))
+        throw new Error("Choose a JPG, PNG, WebP, or GIF image.");
+      if (file.size > 5 * 1024 * 1024)
+        throw new Error("Images must be 5 MB or smaller.");
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("Could not read this image."));
+        reader.onload = () =>
+          typeof reader.result === "string"
+            ? resolve(reader.result)
+            : reject(new Error("Could not read this image."));
+        reader.readAsDataURL(file);
+      });
+      return apiClient("/api/v1/admin/blog/media", {
+        method: "POST",
+        body: JSON.stringify({
+          fileName: file.name,
+          mimeType: file.type,
+          base64,
+          altText: file.name.replace(/\.[^.]+$/, ""),
+        }),
+      });
+    },
+    onSuccess: async () => {
+      setUploadError("");
+      await cache.invalidateQueries({ queryKey: ["admin", "blog"] });
+    },
+    onError: (error) => setUploadError(error.message),
+    onSettled: () => {
+      if (fileRef.current) fileRef.current.value = "";
+    },
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) =>
+      apiClient(`/api/v1/admin/blog/media/${id}`, { method: "DELETE" }),
+    onSuccess: () => cache.invalidateQueries({ queryKey: ["admin", "blog"] }),
+    onError: (error) => setUploadError(error.message),
+  });
   const filtered = media.filter((item) =>
     item.name.toLowerCase().includes(query.trim().toLowerCase()),
   );
@@ -1481,17 +1566,36 @@ function MediaPanel({ media }: { readonly media: BlogMedia[] }) {
               stored
             </p>
           </div>
-          <div className="border-border bg-surface-subtle flex min-h-32 flex-col items-center justify-center rounded-2xl border border-dashed p-6 text-center">
+          <button
+            className="border-border bg-surface-subtle hover:border-primary/40 hover:bg-primary/5 flex min-h-32 flex-col items-center justify-center rounded-2xl border border-dashed p-6 text-center transition-colors disabled:cursor-wait disabled:opacity-60"
+            disabled={upload.isPending}
+            onClick={() => fileRef.current?.click()}
+            type="button"
+          >
             <Upload className="text-primary size-5" />
             <p className="text-foreground mt-2 text-xs font-bold">
-              Upload provider not connected
+              {upload.isPending ? "Uploading to storage…" : "Upload media"}
             </p>
             <p className="text-muted-foreground mt-1 text-[.62rem]">
-              Use a saved image URL in the editor until object storage is
-              configured.
+              JPG, PNG, WebP, or GIF · maximum 5 MB
             </p>
-          </div>
+          </button>
+          <input
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            className="sr-only"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) upload.mutate(file);
+            }}
+            ref={fileRef}
+            type="file"
+          />
         </div>
+        {uploadError ? (
+          <p className="bg-danger/10 text-danger mt-4 rounded-xl p-3 text-[.64rem] font-semibold">
+            {uploadError}
+          </p>
+        ) : null}
       </section>
       <section className="surface-card overflow-hidden rounded-[1.5rem]">
         <div className="border-border flex items-center justify-between gap-4 border-b p-5 sm:p-6">
@@ -1526,6 +1630,7 @@ function MediaPanel({ media }: { readonly media: BlogMedia[] }) {
                   loading="lazy"
                   sizes="320px"
                   src={item.url}
+                  unoptimized
                 />
               </div>
               <div className="p-3">
@@ -1542,6 +1647,19 @@ function MediaPanel({ media }: { readonly media: BlogMedia[] }) {
                   Used by {item.usageCount} article
                   {item.usageCount === 1 ? "" : "s"}
                 </p>
+                <button
+                  className="text-muted-foreground hover:text-danger mt-3 inline-flex items-center gap-1.5 text-[.6rem] font-bold transition-colors disabled:opacity-50"
+                  disabled={remove.isPending || item.usageCount > 0}
+                  onClick={() => remove.mutate(item.id)}
+                  title={
+                    item.usageCount > 0
+                      ? "Remove this image from articles before deleting it"
+                      : "Delete media"
+                  }
+                  type="button"
+                >
+                  <Trash2 className="size-3.5" /> Delete
+                </button>
               </div>
             </article>
           ))}
