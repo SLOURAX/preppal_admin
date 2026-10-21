@@ -194,7 +194,7 @@ input:disabled,
 @layer components {
   .surface-card {
     border: 1px solid var(--border);
-    border-radius: 1.1rem;
+    border-radius: .5rem;
     background: color-mix(in srgb, var(--surface) 97%, transparent);
     box-shadow: var(--shadow);
     backdrop-filter: blur(16px);
